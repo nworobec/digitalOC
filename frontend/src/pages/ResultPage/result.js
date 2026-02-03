@@ -58,8 +58,8 @@ const Result = () => {
             .then(response => {
                 if (response.ok) {
                     // After the backend generates the new visualization, fetch it
-                    return fetch('http://localhost:5000/playVisualization', { method: 'GET' });
-                }
+                    return fetch('http://localhost:5000/playVisualizationt=${Date.now()}', { method: 'GET' });
+                }   //      added timestamp to prevent caching of the image   
                 throw new Error('Failed to generate play suggestion');
             })
             .then(response => response.blob())
@@ -67,9 +67,12 @@ const Result = () => {
                 // Update the visualization image
                 const imageObjectURL = URL.createObjectURL(imageBlob);
                 setVisualizationImage(imageObjectURL);
+                setEditableData(prev => ({...prev, situationArray: updatedSituationArray}));
+                //update the situationData display with the new situation array
             })
             .catch(error => {
                 console.error("Error updating play visualization:", error);
+                alert("Failed to update play visualization. Please try again.");
             });
 
         // Update the situationData display
@@ -287,7 +290,9 @@ const Result = () => {
                 <div className="right-column">
                     <div className="visualization-container">
                         <h2>Play Visualization:</h2>
+                        
                         <img src={visualizationImage} alt="Play Visualization" className="visualization-image" />
+                        
                     </div>
                 </div>
             </div>
