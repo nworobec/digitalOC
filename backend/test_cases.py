@@ -8,8 +8,7 @@
 # matplotlib.use('Agg')  # Use non-interactive backend for server
 # import matplotlib.pyplot as plt
 
-
-from pbp_situation_model import train_pbp_model, predict_play
+from pbp_situation_model import train_pbp_situation_model, predict_play
 from run_model import train_run_models, predict_run_metrics
 from pass_model import train_pass_models, predict_pass_metrics
 from routeDrawer.playDraw import visualize_play
@@ -30,11 +29,13 @@ if __name__ == "__main__":
 
     all_test_cases = [test_case_2]
 
+    # Load the PBP Situation, Run, and Pass models
+
 
     ''' Predict whether the play for the given situation should be a run or pass '''
 
     # Train the PBP Situation Model
-    trained_model, feature_columns = train_pbp_model()
+    pbp_situation_model, feature_columns = train_pbp_situation_model()
     print(feature_columns)
     print()
 
@@ -47,7 +48,7 @@ if __name__ == "__main__":
 
     for test_case in all_test_cases:
         # Predict the most optimal play for each situation
-        prediction, confidence = predict_play(test_case, trained_model, feature_columns)
+        prediction, confidence = predict_play(test_case, pbp_situation_model, feature_columns)
 
         ''' 
             From this point on, depending on the predicition, you would either feed it into the run or pass model. 

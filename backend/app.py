@@ -4,85 +4,34 @@ import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend for Flask
 import matplotlib.pyplot as plt
 
-from pbp_situation_model import train_pbp_model, predict_play
-from run_model import train_run_models, predict_run_metrics
-from pass_model import train_pass_models, predict_pass_metrics
+from pbp_situation_model import predict_play
+from run_model import predict_run_metrics
+from pass_model import predict_pass_metrics
 from routeDrawer.playDraw import visualize_play
 
+import joblib
+from pathlib import Path
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-# Global variables to store loaded models
-pbp_model = None
-pbp_feature_columns = None
-run_models = None
-pass_models = None
 
+# Load the PBP, run and pass models when the application starts
+model_dir = Path("models")
+model_dir.mkdir(exist_ok=True)
+pbp_model = joblib.load(model_dir / "pbp_situation_model.joblib")
+run_models = joblib.load(model_dir / "run_models.joblib")
+pass_models = joblib.load(model_dir / "pass_models.joblib")
 
-def train_all_models():
-    """Train all models on application startup."""
-    global pbp_model, pbp_feature_columns, run_models, pass_models
-    
-    print("=" * 60)
-    print("Training models on Flask app startup...")
-    print("=" * 60)
-    print()
-    
-    # Train PBP model
-    print("1. Training PBP (Play-by-Play) model...")
-    print("-" * 60)
-    try:
-        pbp_model, pbp_feature_columns = train_pbp_model()
-        print("✓ PBP model trained successfully")
-    except Exception as e:
-        print(f"✗ Error training PBP model: {e}")
-        raise
-    print()
-    
-    # Train Run models
-    print("2. Training Run models...")
-    print("-" * 60)
-    try:
-        run_models = train_run_models()
-        if run_models:
-            print("✓ Run models trained successfully")
-        else:
-            print("✗ Run model training returned empty dictionary")
-    except Exception as e:
-        print(f"✗ Error training Run models: {e}")
-        raise
-    print()
-    
-    # Train Pass model
-    print("3. Training Pass model...")
-    print("-" * 60)
-    try:
-        from pass_model import train_pass_models
-        pass_models = train_pass_models()
-        if pass_models:
-            print("✓ Pass models trained successfully")
-        else:
-            print("✗ Pass model training returned empty dictionary")
-    except Exception as e:
-        print(f"✗ Error training Pass model: {e}")
-        # Don't raise for pass model since it's optional
-    print()
-    
-    print("=" * 60)
-    print("Model training complete! Flask app is ready.")
-    print("=" * 60)
-    print()
-
-
-# Train all models when the application starts
-train_all_models() 
+import json
+with open(model_dir / "pbp_situation_model_meta.json", 'r') as f:
+    metadata = json.load(f)
+pbp_feature_columns = metadata["feature_columns"]
 
 
 @app.route("/suggestPlay/<situation>", methods=['GET'])
 def suggest_play(situation):
     ''' Endpoint from the React frontend to get play suggestion based on the incoming situation '''
-
 
     # Convert the attributes from the URL string to a list of appropriate types
     '''
@@ -98,9 +47,23 @@ def suggest_play(situation):
                  situation[10], situation[11]]
 
 
-    # Predict whether the play type for the given situation should be a run or pass
-    prediction, confidence = predict_play(situation, trained_model=pbp_model, feature_columns=pbp_feature_columns)
+    score_diff = abs(situation[7])
+    if score_diff > 16:
+        print("NOTICE: Game state is non-competitive. Suggestion may be biased by clock-management.")
 
+    
+    yardline = situation[2]
+    is_midfield_aggression = 1 if 35 <= yardline <= 45 else 0
+    is_deep_redzone = 1 if yardline <= 10 else 0
+
+    situation.append(is_midfield_aggression)
+    situation.append(is_deep_redzone)
+
+    # Predict whether the play type should be a run or pass
+    prediction_int, confidence = predict_play(situation, trained_model=pbp_model, feature_columns=pbp_feature_columns)
+
+    # 1 = Pass Intent (Passes, Sacks, Scrambles), 0 = Run Intent
+    prediction = 'pass' if prediction_int == 1 else 'run'
 
     # Depending on the prediction, feed it into the run or pass model
     if prediction == 'run':

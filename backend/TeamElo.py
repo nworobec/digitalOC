@@ -4,8 +4,8 @@ import nflreadpy as nfl
 
 
 #pd.read_csv("data/pbp_participation_2024.csv")
-df0 = pd.read_csv("data/pbp_2020_0.csv")
-df1 = pd.read_csv("data/pbp_2020_1.csv")
+df0 = pd.read_csv("data/pbp_2020_0.csv", low_memory=False)
+df1 = pd.read_csv("data/pbp_2020_1.csv", low_memory=False)
 
 merged = pd.concat([df0, df1], ignore_index=True)
 

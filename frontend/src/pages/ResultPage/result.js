@@ -1,6 +1,8 @@
 import React, {useEffect, useState} from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import './result.css';
+import Sitaution, {calculateGameSeconds, calculateHalfSeconds, calculateQtrSeconds} from '../SituationPage/situation';
+
 
 const Result = () => {
     const location = useLocation();
@@ -32,25 +34,31 @@ const Result = () => {
         }));
     };
 
-    const submitUpdatedSituation = () => {
+    const submitUpdatedSituation = async () => {
+
+        console.log("DEBUG, quarter, minutes, seconds:", editableData.quarter, editableData.minutes, editableData.seconds);
+        console.log("Those values should be parsed as ints correctly in calculation functions.");
+
+        // Recalculate necessary values
+        const ydLine100 = (editableData.ownOppMidfield === "own" ? 100 - parseInt(editableData.ydLine50) : editableData.ownOppMidfield === "midfield" ? 50 : editableData.ownOppMidfield === "opp" ? parseInt(editableData.ydLine50) : undefined);
+        const goalToGo = (ydLine100 === parseInt(editableData.ydsToGo) ? 1 : 0);
+        const scoreDiff = parseInt(editableData.offensePoints) - parseInt(editableData.defensePoints);
+        const quarterSeconds = await calculateQtrSeconds(editableData.minutes, editableData.seconds);
+        const halfSeconds = await calculateHalfSeconds(editableData.quarter, editableData.minutes, editableData.seconds);
+        const gameSeconds = await calculateGameSeconds(editableData.quarter, editableData.minutes, editableData.seconds);
+        
+        /*
+            Situation array should follow this order:
+            const situationArray = `${down}, ${ydsToGo}, ${ydLine100}, ${goalToGo}, 
+                                    ${qtrSeconds}, ${halfSeconds}, ${gameSeconds}, ${scoreDiff}, 
+                                    ${finalOffenseTimeouts}, ${finalDefenseTimeouts}, ${offenseTeam}, ${defenseTeam}`;
+        */
+        
         // Create updated situation array
         const updatedSituationArray = [
-            editableData.down,
-            editableData.ydsToGo,
-            editableData.ownOppMidfield === 'midfield' ? 50 : 
-                (editableData.ownOppMidfield === 'opp' ? 
-                    parseInt(editableData.ydLine50) : 
-                    100 - parseInt(editableData.ydLine50)),
-            editableData.ownOppMidfield === 'midfield' ? 1 : 0,
-            editableData.quarter === 'OT' ? 5 : parseInt(editableData.quarter),
-            (parseInt(editableData.quarter) - 1) * 900 + (900 - (parseInt(editableData.minutes) * 60 + parseInt(editableData.seconds))),
-            (Math.ceil(parseInt(editableData.quarter) / 2) - 1) * 1800 + (1800 - (parseInt(editableData.minutes) * 60 + parseInt(editableData.seconds))),
-            parseInt(editableData.minutes) * 60 + parseInt(editableData.seconds),
-            parseInt(editableData.offensePoints) - parseInt(editableData.defensePoints),
-            parseInt(editableData.offenseTimeouts),
-            parseInt(editableData.defenseTimeouts),
-            editableData.offenseTeam,
-            editableData.defenseTeam
+            editableData.down, editableData.ydsToGo, ydLine100, goalToGo, quarterSeconds, halfSeconds, 
+            gameSeconds, scoreDiff, parseInt(editableData.offenseTimeouts), parseInt(editableData.defenseTimeouts), 
+            editableData.offenseTeam, editableData.defenseTeam
         ].join(',');
 
         // First, send the updated situation to the backend to generate new visualization

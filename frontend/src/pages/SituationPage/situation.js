@@ -37,6 +37,32 @@ import TBLogo from '../../logos/TB.png';
 import TENLogo from '../../logos/TEN.png';
 import WASLogo from '../../logos/WAS.png';
 
+// Below are functions to calculate seconds remaining in quarter, half, and game
+export async function calculateQtrSeconds(minutes, seconds) {
+    seconds = parseInt(seconds);
+    minutes = parseInt(minutes);
+
+    return seconds + (minutes * 60); 
+}
+
+export async function calculateHalfSeconds(qtr, minutes, seconds) {
+    seconds = parseInt(seconds);
+    minutes = parseInt(minutes);
+
+    if (qtr === '1' || qtr === '3') seconds += 900; 
+    return seconds + (minutes * 60); 
+}
+
+export async function calculateGameSeconds(qtr, minutes, seconds) {
+    seconds = parseInt(seconds);
+    minutes = parseInt(minutes);
+
+    if (qtr === '3') seconds += 900; 
+    else if (qtr === '2') seconds += 1800; 
+    else if (qtr === '1') seconds += 2700; 
+    return seconds + (minutes * 60); 
+}
+
 const Situation = () => {
     const navigate = useNavigate();
     
@@ -227,31 +253,6 @@ const Situation = () => {
         }
         return 50; // Default to center
     };
-    
-    async function calculateQtrSeconds(minutes, seconds) {
-        seconds = parseInt(seconds);
-        minutes = parseInt(minutes);
-
-        return seconds + (minutes * 60); 
-    }
-
-    async function calculateHalfSeconds(qtr, minutes, seconds) {
-        seconds = parseInt(seconds);
-        minutes = parseInt(minutes);
-
-        if (qtr === '1' || qtr === '3') seconds += 900; 
-        return seconds + (minutes * 60); 
-    }
-
-    async function calculateGameSeconds(qtr, minutes, seconds) {
-        seconds = parseInt(seconds);
-        minutes = parseInt(minutes);
-
-        if (qtr === '3') seconds += 900; 
-        else if (qtr === '2') seconds += 1800; 
-        else if (qtr === '1') seconds += 2700; 
-        return seconds + (minutes * 60); 
-    }
 
     async function submitSituation() {
         // Default timeouts to 0 if not selected

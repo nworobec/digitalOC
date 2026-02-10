@@ -59,6 +59,8 @@ def add_football_intelligence_features(df: pd.DataFrame) -> pd.DataFrame:
     df2["is_redzone"] = (df2["yardline_100"] <= 20).astype(int)
     df2["is_goal_to_go"] = df2["goal_to_go"].fillna(0).astype(int)
     df2["is_backed_up"] = (df2["yardline_100"] >= 80).astype(int)
+    df2["is_midfield_aggression"] = df2["yardline_100"].between(35, 45).astype(int)
+    df2["is_deep_redzone"] = (df2["yardline_100"] <= 10).astype(int)
 
     #Down and distance
     df2["is_third_long"] = ((df2["down"] == 3) & (df2["ydstogo"] >= 7)).astype(int)
@@ -109,7 +111,7 @@ def build_global_feature_set(df: pd.DataFrame) -> List[str]:
         "is_third_long", "is_third_short", "is_second_long", "is_first_down",
         "is_two_minute", "is_close_game_late", "is_blowout",
         "is_leading", "is_trailing", "score_margin_abs", "is_shotgun",
-        "is_empty", "is_heavy", "field_position"
+        "is_empty", "is_heavy", "field_position", "is_midfield_aggression", "is_deep_redzone"
     ]
     #include a few contextual cols if present
     context = ["temp", "wind", "roof", "surface"]
@@ -290,7 +292,8 @@ def predict_pass_metrics(situation, trained_models):
     # Convert input to DataFrame with correct column names
     situation_df = pd.DataFrame([situation], columns=['down', 'ydstogo', 'yardline_100', 'goal_to_go', 'quarter_seconds_remaining',
                                                       'half_seconds_remaining', 'game_seconds_remaining', 'score_differential', 
-                                                      'posteam_timeouts_remaining', 'defteam_timeouts_remaining', 'posteam', 'defteam'])
+                                                      'posteam_timeouts_remaining', 'defteam_timeouts_remaining', 'posteam', 'defteam',
+                                                      'is_midfield_aggression', 'is_deep_redzone'])
 
     # Add the football intelligence features
     situation_df = add_football_intelligence_features(situation_df)
@@ -318,5 +321,15 @@ def predict_pass_metrics(situation, trained_models):
 
     return predictions
 
+
 if __name__ == "__main__":
-    train_pass_models()
+    # Train the Pass models when running this file separately
+    model = train_pass_models()
+
+    # Save the pass model to the models directory
+    model_dir = Path("models")
+    model_dir.mkdir(exist_ok=True)
+
+    model_path = model_dir / "pass_models.joblib"
+    joblib.dump(model, model_path)
+    print(f"Pass models saved to {model_path}")
