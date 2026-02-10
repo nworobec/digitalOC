@@ -10,7 +10,7 @@ from TeamElo import PlayClassifier, team_elos
 
 def train_pbp_model():
     # Open both 2024 Play-by-Play CSV files and combine them
-    pbp_files = [pd.read_csv("Data/pbp_2024_0.csv"), pd.read_csv("Data/pbp_2024_1.csv")]
+    pbp_files = [pd.read_csv("data/pbp_2024_0.csv"), pd.read_csv("data/pbp_2024_1.csv")]
     df = pd.concat(pbp_files, ignore_index=True)
     print(df.columns.to_list())
     print(df.head())

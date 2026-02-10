@@ -105,10 +105,10 @@ def suggest_play(situation):
     # Depending on the prediction, feed it into the run or pass model
     if prediction == 'run':
         run_prediction = predict_run_metrics(situation, trained_models=run_models)
-        run_gap = run_prediction['run_gap']
-        run_location = run_prediction['run_location']
-        offense_formation = run_prediction['offense_formation']
-        personnel_off = run_prediction['personnel_off']
+        run_gap = run_prediction.get('run_gap', 'unknown')
+        run_location = run_prediction.get('run_location')
+        offense_formation = run_prediction.get('offense_formation')
+        personnel_off = run_prediction.get('personnel_off')
 
         print(f"Suggested Run Play Metrics")
         print(f"Run Gap: {run_gap}")
@@ -117,7 +117,11 @@ def suggest_play(situation):
         print(f"Personnel Offense: {personnel_off}")
 
         # Modify the offense personnel to get only the RBs, WRs, and TEs when visualizing the play
-        personnel_rb_wr_te = ', '.join([part for part in personnel_off.split(', ') if any(pos in part for pos in ['RB', 'WR', 'TE'])])
+        if personnel_off is not None:
+            personnel_parts = personnel_off.split(', ')
+            personnel_rb_wr_te = ', '.join([part for part in personnel_parts if any(pos in part for pos in ['RB', 'WR', 'TE'])])
+        else:
+            personnel_rb_wr_te = "Personnel Unknown"
         print(f"Personnel (RB/WR/TE only): {personnel_rb_wr_te}")
 
         run_play_input = {

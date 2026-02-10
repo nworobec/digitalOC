@@ -54,41 +54,39 @@ const Result = () => {
         ].join(',');
 
         // First, send the updated situation to the backend to generate new visualization
-        fetch(`http://localhost:5000/suggestPlay/${updatedSituationArray}`, { method: 'GET' })
+        fetch(`https://glowing-giggle-6954gr9qpw9p34wwv-5000.app.github.dev//suggestPlay/${updatedSituationArray}`, { method: 'GET' })
             .then(response => {
                 if (response.ok) {
                     // After the backend generates the new visualization, fetch it
-                    return fetch('http://localhost:5000/playVisualizationt=${Date.now()}', { method: 'GET' });
+                    return fetch(`https://glowing-giggle-6954gr9qpw9p34wwv-5000.app.github.dev/playVisualization?t=${Date.now()}`, { method: 'GET' });
                 }   //      added timestamp to prevent caching of the image   
                 throw new Error('Failed to generate play suggestion');
             })
             .then(response => response.blob())
             .then(imageBlob => {
-                // Update the visualization image
-                const imageObjectURL = URL.createObjectURL(imageBlob);
-                setVisualizationImage(imageObjectURL);
-                setEditableData(prev => ({...prev, situationArray: updatedSituationArray}));
-                //update the situationData display with the new situation array
-            })
+            const imageObjectURL = URL.createObjectURL(imageBlob);
+            setVisualizationImage(imageObjectURL);
+            
+            // update the display text by navigating with the new state
+            navigate('/result', {
+                state: {
+                    ...editableData,
+                    situationArray: updatedSituationArray
+                }
+            }, { replace: true });
+        })
             .catch(error => {
                 console.error("Error updating play visualization:", error);
-                alert("Failed to update play visualization. Please try again.");
-            });
+                alert("Failed to update. Check backend terminal for errors.");
+        });
+};
 
-        // Update the situationData display
-        navigate('/result', {
-            state: {
-                ...editableData,
-                situationArray: updatedSituationArray
-            }
-        }, { replace: true });
-    };
-
+        
     useEffect(() => {
         console.log("Received situation data:", situationData);
 
         // Fetch the play visualization image from the Flask backend
-        fetch('http://localhost:5000/playVisualization', { method: 'GET' })
+        fetch('https://glowing-giggle-6954gr9qpw9p34wwv-5000.app.github.dev//playVisualization', { method: 'GET' })
             .then(response => response.blob())
             .then(imageBlob => {
                 // Create a local URL of the image blob and set it as the visualization image source

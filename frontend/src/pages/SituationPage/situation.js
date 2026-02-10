@@ -299,6 +299,8 @@ const Situation = () => {
             .catch(error => {
                 console.error("Error calling Flask endpoint:", error);
             });
+    //To handle updating the situation state to fetch when situation array is changed on front end side,
+    // we need to add a loop to monitor situation array changes and call the endpoint again if it changes.
 
         // Navigate to result page with situation data and show the play visualization
         navigate('/result', { 
