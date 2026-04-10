@@ -356,6 +356,7 @@ def get_default_alignments(personnel_counts, formation, play_type='pass', locati
 
     OFFSET_RB_SLOTS  = [(2, -5), (-2, -5)]
     I_FORM_RB_SLOTS  = [(0, -3), (0, -5)]
+    SINGLEBACK_FB_SLOTS = [(2, -3), (-2, -3)] #used if FB is in personnel and singleback is formation
     PISTOL_RB_SLOTS  = [(0, backfield_y), (-4, -4) if run_side == 'left' else (4, -4)]
 
     available_wr_slots = WR_SLOTS.copy()

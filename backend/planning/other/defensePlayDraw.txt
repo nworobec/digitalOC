@@ -1,0 +1,19 @@
+adding defense to play visualization:
+- # of players in box, effects coverage shell
+- coverage (make it look like madden)
+- press/off coverage from cornerbacks
+
+other bugs that need to be fixed:
+- dragon concept: flat needs to be slot receiver, slant needs to be outside receiver
+- singleback with 2 running backs: add fullback, make formation look like strong
+- pass to the full back is completely broken
+- situation model heavily favors pass plays (<95% confidence to pass on every down)
+- ensure that multiple receivers/skill players cannot occupy the same spot to line up in
+
+things to be added:
+- if 2 tight ends, 1 receiver, 2 backs, throw is cross to TE, concept should be Yankee (TE Cross, WR Big Post, FB on TE side Flat)
+- single receiver routes for when there are 2 TEs and 2 RBs
+
+2 TE/FB routes/concepts/rules:
+- if FB is targeted receiver, route needs to be a flat route (update FB route if necessary)
+- do not let FB be targeted receiver if there is only 1 RB in personnel
