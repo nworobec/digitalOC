@@ -181,7 +181,10 @@ def suggest_play():
         }
 
         p_complete_and_exp_yards = predict_exp_yards_pass(pass_play_input, completion_prob_model, exp_pass_yards_model)
-        exp_yards = f"{p_complete_and_exp_yards[0].round(2)}\n% will be complete: {(p_complete_and_exp_yards[1]*100).round(0)}"
+        exp_yards = (
+            f"{p_complete_and_exp_yards[0].round(2)}\n"
+            f"Completion Probability: {(p_complete_and_exp_yards[1] * 100).round(0)}%"
+        )
         play_visualization = visualize_play(pass_play_input)
 
     play_visualization_b64 = base64.b64encode(play_visualization.getvalue()).decode('utf-8')

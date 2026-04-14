@@ -166,7 +166,7 @@ const Result = () => {
                             />
                         </div>
                         <div className="detail-item">
-                            <span className="detail-label">Defensive Coverage:</span>
+                            <span className="detail-label">Coverage:</span>
                             <select 
                                 className="detail-input" 
                                 value={editableData.defenseCoverage}
@@ -229,7 +229,7 @@ const Result = () => {
                                 )}
                             </div>
                         </div>
-                        <div className="detail-item" style={{ border: '2px dashed #ff69ff' }}>
+                        <div className="detail-item">
                             <span className="detail-label">Play Type:</span>
                             <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
                                 <select 
