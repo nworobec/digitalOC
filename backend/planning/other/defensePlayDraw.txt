@@ -13,6 +13,7 @@ other bugs that need to be fixed:
 things to be added:
 - if 2 tight ends, 1 receiver, 2 backs, throw is cross to TE, concept should be Yankee (TE Cross, WR Big Post, FB on TE side Flat)
 - single receiver routes for when there are 2 TEs and 2 RBs
+- JUMBO formation: 3 TE, 2 RB
 
 2 TE/FB routes/concepts/rules:
 - if FB is targeted receiver, route needs to be a flat route (update FB route if necessary)
