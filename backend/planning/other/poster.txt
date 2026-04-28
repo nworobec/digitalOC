@@ -1,0 +1,17 @@
+Semester Goals:
+- Improve baseline models
+- Build a regression model to estimate expected yards gained
+- Add multiple play visualizations to frontend
+
+Results & Conclusions:
+- Improved efficiency of frontend input workflow, allowing for more streamlined user interaction
+- Added additional offensive parameters to all models that increased accuracy and output of models to more closely mirror real football decisions
+- Enhanced pass visualization to include routes for all receivers, visualizing multiple real football concepts
+- Added defensive parameters to all models that increased accuracy and output of models
+- Modified models and front end to visualize multiple outputs from one situation, allowing for comparison between multiple optimal options suggested by models
+- Developed and implemented linear regression models for expected yards gained for any given play and expected completion rate of any given passing play
+
+Future Goals:
+- Add defensive coverage into visualization, allowing for a complete visualization of everything that would be run on that play
+- Add model for picking the optimal defense. Coverages, personnel, press, etc.
+- Continue improving accuracy of all models, ensuring reliable, consistent, and insightful predictions.
