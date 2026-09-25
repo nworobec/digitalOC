@@ -9,6 +9,7 @@ const Result = () => {
     const navigate = useNavigate();
     const situationData = location.state;
     const [visualizationImage, setVisualizationImage] = useState(null);
+    const [scoutingReport, setScoutingReport] = useState(situationData?.scoutingReport || null);
 
     // Editable state for situation details
     const [editableData, setEditableData] = useState({
@@ -25,9 +26,8 @@ const Result = () => {
         seconds: situationData?.seconds || '',
         offenseTimeouts: situationData?.offenseTimeouts || '',
         defenseTimeouts: situationData?.defenseTimeouts || '',
-        expYards: situationData?.expYards || '',
         playHistory: situationData?.playHistory || [], 
-        actualPlayType: 'run', // lets the user select what play actually ran
+        actualPlayType: 'run', 
         defenseCoverage: situationData?.defenseCoverage || 'UNKNOWN'
     });
 
@@ -47,19 +47,15 @@ const Result = () => {
         const halfSeconds = await calculateHalfSeconds(editableData.quarter, editableData.minutes, editableData.seconds);
         const gameSeconds = await calculateGameSeconds(editableData.quarter, editableData.minutes, editableData.seconds);
 
-        // --- SEQUENCE LOGIC ---
-        // Calculate yards gained by comparing the old yardline to the new yardline
-        // (this logic assumes the team hasn't crossed midfield/changed possession for simplicity right now)
+        // Sequence Logic
         const oldYdLine100 = situationData.ydLine100 || 50; 
         const yardsGained = oldYdLine100 - ydLine100; 
 
-        // Add the completed play to our history array
         const updatedPlayHistory = [
             ...editableData.playHistory, 
             { play_type: editableData.actualPlayType, yards_gained: yardsGained }
         ];
 
-        // Format for Flask
         const currentSituation = {
             down: parseInt(editableData.down),
             ydstogo: parseInt(editableData.ydsToGo),
@@ -76,7 +72,7 @@ const Result = () => {
             defense_coverage_type: editableData.defenseCoverage
         };
 
-        let newExpYards = null;
+        let newScoutingReport = null;
         let newPlayVisualization = null;
 
         try {
@@ -90,18 +86,18 @@ const Result = () => {
             });
 
             const data = await response.json();
-            newExpYards = data.expected_yards;
+            newScoutingReport = data.scouting_report;
             newPlayVisualization = data.play_visualization;
+            
             setVisualizationImage(`data:image/png;base64,${newPlayVisualization}`);
+            setScoutingReport(newScoutingReport);
 
         } catch (error) {
             console.error("Error updating play visualization:", error);
         }
 
-        // Update local state
         setEditableData(prev => ({
             ...prev,
-            expYards: newExpYards,
             playVisualization: newPlayVisualization,
             playHistory: updatedPlayHistory
         }));
@@ -109,12 +105,9 @@ const Result = () => {
 
     useEffect(() => {
         console.log("Received situation data:", situationData);
-
-        // Set play visualization image when the page loads or when situationData changes
         if (situationData?.playVisualization) {
             setVisualizationImage(`data:image/png;base64,${situationData.playVisualization}`);
         }
-
     }, [situationData]);
 
 
@@ -334,10 +327,53 @@ const Result = () => {
 
                 <div className="right-column">
                     <div className="visualization-container">
-                        <h2>Play Visualization:</h2>
+                        <h2>Top Play Visualization:</h2>
                         <img src={visualizationImage} alt="Play Visualization" className="visualization-image" />
                         <br />
-                        <h2>Expected Yards: {editableData.expYards}</h2>
+                        
+                        {/* NEW SCOUTING DASHBOARD */}
+                        {scoutingReport && (
+                            <div className="scouting-dashboard" style={{ marginTop: '20px', textAlign: 'left', background: '#000000', padding: '15px', borderRadius: '8px' }}>
+                                <h2>Opponent Tendencies</h2>
+                                
+                                <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '15px' }}>
+                                    <div style={{ padding: '10px', background: scoutingReport.pbp_tendency.primary_tendency === 'PASS' ? '#d4edda' : 'transparent', borderRadius: '5px' }}>
+                                        <strong>Pass Probability:</strong> {(scoutingReport.pbp_tendency.pass_probability * 100).toFixed(1)}%
+                                    </div>
+                                    <div style={{ padding: '10px', background: scoutingReport.pbp_tendency.primary_tendency === 'RUN' ? '#d4edda' : 'transparent', borderRadius: '5px' }}>
+                                        <strong>Run Probability:</strong> {(scoutingReport.pbp_tendency.run_probability * 100).toFixed(1)}%
+                                    </div>
+                                </div>
+
+                                {scoutingReport.pbp_tendency.primary_tendency === 'PASS' && scoutingReport.pass_tendencies && (
+                                    <div className="pass-tendencies">
+                                        <h3>Top Pass Routes</h3>
+                                        <ul>
+                                            {scoutingReport.pass_tendencies.route.map((r, i) => (
+                                                <li key={i}>{r.label.toUpperCase()} - {(r.probability * 100).toFixed(1)}%</li>
+                                            ))}
+                                        </ul>
+                                        <h3>Top Target Areas</h3>
+                                        <ul>
+                                            {scoutingReport.pass_tendencies.pass_target_area.map((t, i) => (
+                                                <li key={i}>{t.label.replace('_', ' ').toUpperCase()} - {(t.probability * 100).toFixed(1)}%</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                {scoutingReport.pbp_tendency.primary_tendency === 'RUN' && scoutingReport.run_tendencies && (
+                                    <div className="run-tendencies">
+                                        <h3>Top Run Lanes</h3>
+                                        <ul>
+                                            {scoutingReport.run_tendencies.run_tendencies.map((r, i) => (
+                                                <li key={i}>{r.run_lane.replace('_', ' ').toUpperCase()} - {(r.probability * 100).toFixed(1)}%</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
