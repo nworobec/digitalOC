@@ -50,7 +50,8 @@ NUMERIC_FEATURES = [
     "is_desperation_time",      # <-- NEW
 ]
 
-CATEGORICAL_FEATURES = [ #removed teams due to emptyness of one-hot encoding
+CATEGORICAL_FEATURES = [
+    "posteam",
     "offense_personnel",
     "offense_formation",
 ]
@@ -174,8 +175,9 @@ def predict_play(situation_dict: Dict[str, Any], trained_model, feature_columns:
     situation_df = pd.DataFrame([situation_dict])
     situation_df = add_derived_features(situation_df)
 
-    # One-hot encode and reindex to match the training feature schema
-    situation_encoded = pd.get_dummies(situation_df, columns=CATEGORICAL_FEATURES, drop_first=True, dtype=int)
+    # Keep the observed category for a single row; reindex removes training's
+    # baseline category and any unseen categories without erasing known teams.
+    situation_encoded = pd.get_dummies(situation_df, columns=CATEGORICAL_FEATURES, drop_first=False, dtype=int)
     situation_encoded = situation_encoded.reindex(columns=feature_columns, fill_value=0)
 
     # Extract calibrated probabilities
