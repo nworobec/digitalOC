@@ -148,6 +148,13 @@ def draw_field(ax, ydstogo, yardline_100):
 
 # PLAYER POSITIONING
 
+def normalize_route(route):
+    """Map model route labels to the route families supported by the drawer."""
+    if pd.isna(route):
+        return 'UNKNOWN'
+    key = str(route).strip().upper()
+    return {'QUICK OUT': 'OUT', 'DEEP OUT': 'OUT'}.get(key, key)
+
 # Routes that break outward — typically run from the slot (inside alignment)
 SLOT_ROUTES = {'OUT', 'FLAT', 'CORNER', 'WHEEL', 'SCREEN', 'CROSS', 'SLANT'}
 
@@ -187,7 +194,7 @@ def get_start_position(position, pass_location, formation, route=None):
     elif position == 'WR':
         # Fixed positions: outside=±18, inside=±8
         # The concept logic determines which receiver runs which route
-        route_key = str(route).upper() if route else 'UNKNOWN'
+        route_key = normalize_route(route)
         if route_key in SLOT_ROUTES:
             return (-12, -0.5) if location_side == 'left' else (12, -0.5)
         else:
@@ -228,9 +235,7 @@ def get_companion_start_position(primary_pos, pass_location, companion_pref, for
 # ROUTE PATHS
 
 def get_route_path(route_name, start_pos, position, location, air_yards):
-    if pd.isna(route_name):
-        route_name = "UNKNOWN"
-    route_key = str(route_name).upper()
+    route_key = normalize_route(route_name)
 
     start_x, start_y = start_pos
     is_left_side = start_x < 0
@@ -304,10 +309,16 @@ def get_run_path(run_location, run_gap, start_pos):
 # PERSONNEL PARSING & ALIGNMENT
 
 def parse_personnel(personnel_str):
+    """Accept compact personnel codes (11) or lists (1 RB, 1 TE, 3 WR)."""
     counts = {'RB': 0, 'TE': 0, 'WR': 0}
     if pd.isna(personnel_str):
         return counts
-    personnel_str = str(personnel_str).replace('"', '')
+    personnel_str = str(personnel_str).replace('"', '').strip()
+    if len(personnel_str) == 2 and personnel_str.isascii() and personnel_str.isdigit():
+        rb_count, te_count = map(int, personnel_str)
+        if rb_count + te_count <= 5:
+            return {'RB': rb_count, 'TE': te_count, 'WR': 5 - rb_count - te_count}
+        return counts
     for part in personnel_str.split(','):
         part = part.strip()
         pieces = part.split(' ')
@@ -473,9 +484,10 @@ def visualize_play(play_data):
 
     route   = play_data.get('route')
     run_gap = play_data.get('run_gap')
+    explicit_type = play_data.get('play_type')
 
     # ---- PASS PLAY ----
-    if pd.notna(route):
+    if explicit_type == 'pass' or pd.notna(route):
         play_type  = 'pass'
         route      = play_data.get('route')
         location   = play_data.get('pass_location')
@@ -486,7 +498,8 @@ def visualize_play(play_data):
         path      = get_route_path(route, start_pos, position, location, air_yards)
 
         # --- Concept Logic ---
-        route_key = str(route).upper()
+        route_label = str(route).strip().upper()
+        route_key = normalize_route(route)
         concept_fn = ROUTE_CONCEPTS.get(route_key)
         companion_is_te = False 
         
@@ -520,9 +533,9 @@ def visualize_play(play_data):
                 )
 
         if concept_name:
-            path_info_str = "Route: {} ({} yds) | Concept: {}".format(route_key, air_yards, concept_name)
+            path_info_str = "Route: {} ({} yds) | Concept: {}".format(route_label, air_yards, concept_name)
         else:
-            path_info_str = "Route: {} ({} yds)".format(route_key, air_yards)
+            path_info_str = "Route: {} ({} yds)".format(route_label, air_yards)
         
         # --- Backside Concept Logic ---
         if concept_name and concept_name in BACKSIDE_CONCEPTS:
@@ -535,10 +548,6 @@ def visualize_play(play_data):
             
             backside_primary_start = get_start_position(
                 'WR', backside, formation, route=backside_primary_route
-            )
-            backside_primary_path = get_route_path(
-                backside_primary_route, backside_primary_start, 'WR',
-                backside, backside_primary_air
             )
             
             backside_companion_start = get_companion_start_position(
@@ -561,13 +570,19 @@ def visualize_play(play_data):
                     sign = -1 if backside_companion_start[0] < 0 else 1
                     backside_companion_start = (sign * 5, -1) # Force TE alignment
             
+            # Build routes only after personnel assignment finalizes alignment.
+            backside_primary_path = get_route_path(
+                backside_primary_route, backside_primary_start,
+                'TE' if backside_primary_is_te else 'WR',
+                backside, backside_primary_air
+            )
             backside_companion_path = get_route_path(
                 backside_companion_route, backside_companion_start, 'WR',
                 backside, backside_companion_air
             )
 
     #      RUN PLAY 
-    elif pd.notna(run_gap):
+    elif explicit_type == 'run' or pd.notna(play_data.get('run_location')):
         play_type     = 'run'
         location      = play_data.get('run_location')
         run_gap_val   = play_data.get('run_gap')
@@ -587,6 +602,9 @@ def visualize_play(play_data):
     print(f"  > Formation: {formation}")
     print(f"  > Personnel: {personnel}")
     print(f"  > Play Type: {play_type}")
+    if play_type == 'pass':
+        print(f"  > Predicted Route: {route}")
+        print(f"  > Air Yards: {air_yards}")
     if concept_name:
         print(f"  > Concept:   {concept_name}")
 
