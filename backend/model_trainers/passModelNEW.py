@@ -232,8 +232,10 @@ def predict_pass_metrics(situation_dict: Dict[str, Any], trained_models: Dict[st
     situation_df = pd.DataFrame([situation_dict])
     situation_df = add_derived_features(situation_df)
     
+    # Single-row encoding must retain categories; reindex below applies the
+    # training schema, including its omitted baseline and unseen categories.
     situation_encoded = pd.get_dummies(
-        situation_df, columns=CATEGORICAL_FEATURES, drop_first=True, dtype=int
+        situation_df, columns=CATEGORICAL_FEATURES, drop_first=False, dtype=int
     )
     
     predictions = {}
