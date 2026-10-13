@@ -1,0 +1,14 @@
+{
+  "current_situation": {
+    "down": 2,
+    "ydstogo": 6,
+    "yardline_100": 45,
+    "qtr": 2,
+    "game_seconds_remaining": 2100,
+    "score_differential": 0,
+    "posteam_timeouts_remaining": 3,
+    "defteam_timeouts_remaining": 3,
+    "posteam": "KC",
+    "defteam": "BUF"
+  }
+}

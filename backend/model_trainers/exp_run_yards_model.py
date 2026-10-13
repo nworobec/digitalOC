@@ -1,4 +1,9 @@
 import pandas as pd
+
+try:
+    from .inference import encode_inference, align_inference
+except ImportError:
+    from inference import encode_inference, align_inference
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression, Ridge, LogisticRegression
@@ -13,11 +18,9 @@ import os
 
 try:
     from .TeamElo import PlayClassifier, get_team_elos
-    from .upload_to_release import upload_model_to_release
 except ImportError:
     sys.path.insert(0, os.path.dirname(__file__))
     from TeamElo import PlayClassifier, get_team_elos
-    from upload_to_release import upload_model_to_release
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -81,7 +84,7 @@ def train_exp_yards_model_run():
     print(X.head(10))
 
     # target variable
-    y = df_filtered['yards_gained'].clip(-5, 20) # Clip extreme values (reduces noise from breakaway runs/big losses)
+    y = df_filtered['epa'].clip(-5, 20) # Clip extreme values (reduces noise from breakaway runs/big losses)
     print(y.head(10))
 
     # Split the data between X and y
@@ -136,14 +139,14 @@ def predict_exp_yards_run(input_dict, model):
     
     # One-hot encode categorical columns
     categorical_cols = ['posteam', 'defteam', 'run_gap', 'run_location', 'offense_formation', 'offense_personnel', 'defense_coverage_type']
-    input_df_encoded = pd.get_dummies(input_df, columns=categorical_cols, drop_first=True)
+    input_df_encoded = encode_inference(input_df, categorical_cols)
 
     # Align with training data columns
     model_cols = model.feature_names_in_
     for col in model_cols:
         if col not in input_df_encoded.columns:
             input_df_encoded[col] = 0
-    input_df_encoded = input_df_encoded.reindex(columns=model_cols, fill_value=0)
+    input_df_encoded = align_inference(input_df_encoded, model_cols, "run.outcome")
 
     # Make prediction
     prediction = model.predict(input_df_encoded)
@@ -152,6 +155,11 @@ def predict_exp_yards_run(input_dict, model):
 
 
 if __name__ == "__main__":
+    try:
+        from .upload_to_release import upload_model_to_release
+    except ImportError:
+        from upload_to_release import upload_model_to_release
+
     # Save the trained expected yards for run model to GitHub Releases
     model = train_exp_yards_model_run()
     upload_model_to_release(model, "exp_run_yards_model.joblib", "exp-run-yards-model")

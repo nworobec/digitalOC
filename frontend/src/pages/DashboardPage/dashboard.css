@@ -1,0 +1,136 @@
+.oc-connected fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.oc-connected button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+.oc-session-picker { display: flex; align-items: center; gap: 14px; font-size: 11px; color: #718067; margin-bottom: 18px; }
+.oc-session-picker select { padding: 8px; border: 1px solid #dce3d3; border-radius: 5px; max-width: 100%; background: #fff; color: #31492a; }
+.oc-error { background: #fff0ed; border: 1px solid #e5b4a9; border-radius: 7px; padding: 13px; color: #85392d; margin: 12px 0; font-size: 12px; overflow-wrap: anywhere; }
+.oc-error button { display: block; margin-top: 10px; color: inherit; background: transparent; border: 1px solid currentColor; padding: 5px 9px; border-radius: 4px; }
+.oc-status-panel { background: #f9efd9; border: 1px solid #e7d4a6; padding: 16px; font-size: 12px; border-radius: 7px; color: #776133; margin-bottom: 20px; }
+.oc-action-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.oc-action-cards .oc-play-card { padding: 20px; }
+.oc-action-cards .oc-play-card:first-child { border-color: #90a973; background: #f0f5e7; }
+.oc-action-cards .oc-play-card > p { white-space: normal; font-size: 10px; line-height: 1.7; }
+.oc-action-metrics { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; font-size: 10px; color: #6c7c5f; }
+.oc-action-metrics strong { display: block; font-size: 20px; color: #30462a; font-weight: 600; }
+.oc-connected .oc-inline-help { font-size: 10px; line-height: 1.7; color: #728466; margin: 10px 0 16px; }
+.oc-connected .oc-sparse { color: #95651d !important; }
+.oc-concept-heading { margin-top: 25px; }
+.oc-unavailable { padding: 13px; margin-bottom: 16px; border: 1px dashed #d2dbc4; border-radius: 6px; font-size: 11px; color: #748365; line-height: 1.7; }
+.oc-button-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.oc-text-button { border: 0; background: transparent; color: #60784e; font-size: 10px !important; padding: 8px; text-decoration: underline; }
+.oc-connected .oc-sidebar-bottom > a { margin-bottom: 12px; }
+.oc-live-controls .oc-full + .oc-full { margin-top: 9px; }
+.oc-queue { margin-top: 20px; }
+.oc-queue h2 { font-size: 16px; }
+.oc-queue-row { display: flex; justify-content: space-between; gap: 14px; align-items: center; border-bottom: 1px solid #e2e7d8; padding: 14px 0; }
+.oc-queue-row:last-child { border: 0; }
+.oc-queue-row strong { display: block; font-size: 13px; }
+.oc-queue-row span { display: block; font-size: 9px; color: #859277; margin-top: 3px; }
+.oc-observation { font-size: 10px; background: #f0f4e8; padding: 10px; border-radius: 6px; margin-bottom: 18px; }
+.oc-empty { padding: 40px 25px; color: #728165; }
+.oc-empty h2, .oc-empty h3 { color: #354d2a; margin: 15px 0 10px; }
+.oc-empty p { font-size: 12px; line-height: 1.9; max-width: 490px; }
+.oc-two-branches { grid-template-columns: 1fr 1fr; }
+.oc-connected .oc-log-row { grid-template-columns: 1.2fr 1fr 1fr 1fr; }
+.oc-modal-backdrop { position: fixed; inset: 0; background: #092416a8; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 20px; overflow-y: auto; }
+.oc-result-dialog { width: 460px; max-width: 100%; max-height: 95vh; overflow-y: auto; box-shadow: 0 16px 70px #071a1750; }
+.oc-result-dialog h2 { font-size: 23px; letter-spacing: -.6px; }
+.oc-connected .oc-notice { overflow-wrap: anywhere; }
+@media (max-width: 720px) {
+    .oc-session-picker { display: block; }
+    .oc-session-picker select { display: block; width: 100%; margin-top: 6px; font-size: 10px; }
+    .oc-action-cards .oc-play-card { padding: 13px; }
+    .oc-action-cards h3 { font-size: 17px; }
+    .oc-action-metrics { gap: 8px; }
+    .oc-connected .oc-context-column { grid-template-columns: 1fr; }
+    .oc-live-controls .oc-input-pair { grid-template-columns: 1fr 1fr; }
+    .oc-connected .oc-detail-footer { align-items: flex-start; flex-direction: column; }
+    .oc-queue-row { align-items: flex-start; flex-direction: column; }
+    .oc-two-branches { grid-template-columns: 1fr; }
+    .oc-connected .oc-scoreboard .oc-score-stat:nth-last-child(2) { display: block; }
+}
+.oc-connected .oc-fit-cards .oc-play-card { text-align: left; min-width: 0; padding: 14px; }
+.oc-connected .oc-fit-cards .oc-play-card > p { white-space: normal; line-height: 1.6; }
+.oc-fit-cards .oc-field { margin: 10px 0; width: 100%; height: auto; }
+.oc-fit-cards ul { padding-left: 16px; font-size: 11px; line-height: 1.7; color: #53684b; }
+.oc-fit-label { display: block; margin-top: 14px; font-size: 9px; letter-spacing: 1px; color: #4e6c38; }
+.oc-connected .oc-fit-caution { color: #806020; font-size: 11px; line-height: 1.7; }
+.oc-fit-exclusions, .oc-installed { margin: 15px 0; font-size: 11px; line-height: 1.7; }
+.oc-fit-exclusions summary, .oc-installed summary, .oc-log-context summary { cursor: pointer; }
+.oc-connected .oc-installed label { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.oc-connected .oc-installed input { width: 16px; height: 16px; margin: 0; }
+.oc-preference-title { border-top: 1px solid #dce3d3; padding-top: 18px; font-size: 14px; }
+.oc-log-context { font-size: 10px; line-height: 1.6; margin-top: 8px; overflow-wrap: anywhere; }
+.oc-formation-toolbar { justify-content: space-between; margin: 12px 0; font-size: 12px; }
+.oc-formation-tools { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 12px; font-size: 12px; }
+.oc-formation-tools select { display: block; padding: 8px; border: 1px solid #cbd8be; border-radius: 5px; color: #31492a; background: white; }
+.oc-field-editable { touch-action: none; user-select: none; }
+.oc-field-editable [role=button] { cursor: grab; outline: none; }
+.oc-field-editable [role=button]:focus > circle:first-child { stroke: #fff; stroke-width: 2px; }
+
+/* The coordinator workspace gives inputs and opponent evidence the full content width. */
+.oc-connected .oc-dashboard-grid { grid-template-columns: minmax(0, 1fr); }
+.oc-coordinator-hub { display: grid; gap: 24px; margin-bottom: 32px; min-width: 0; }
+.oc-coordinator-hub > .oc-panel { padding: 28px; min-width: 0; }
+.oc-coordinator-hub .oc-panel-heading h2 { font-size: 21px; }
+.oc-coordinator-hub .oc-panel-description { font-size: 12px; }
+.oc-control-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: start; }
+.oc-control-group { min-width: 0; padding: 20px; background: #f7f9f3; border: 1px solid #e2e8d9; border-radius: 12px; }
+.oc-control-group h3 { margin: 0 0 20px; font-size: 15px; color: #354d2a; }
+.oc-connected .oc-live-controls label { font-size: 12px; margin-bottom: 18px; }
+.oc-connected .oc-live-controls select, .oc-connected .oc-live-controls input { font-size: 13px; height: 44px; padding: 0 10px; min-width: 0; }
+.oc-connected .oc-live-controls .oc-installed input { width: 18px; height: 18px; flex-shrink: 0; }
+.oc-connected .oc-live-controls .oc-input-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.oc-coordinator-hub .oc-inline-help { font-size: 12px; line-height: 1.7; }
+.oc-control-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 24px; padding-top: 20px; border-top: 1px solid #e2e8d9; }
+.oc-connected .oc-control-actions .oc-full { width: auto; margin: 0; min-height: 44px; padding: 12px 18px; font-size: 12px !important; }
+.oc-coverage-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 20px 0; }
+.oc-coverage-grid .oc-probability { margin: 0; padding: 18px; background: #f7f9f3; border: 1px solid #e2e8d9; border-radius: 10px; }
+.oc-coverage-grid .oc-probability > div:first-child { font-size: 12px; gap: 12px; }
+.oc-coverage-grid .oc-probability strong { font-size: 19px; }
+.oc-coordinator-hub .oc-observation { display: inline-block; font-size: 12px; padding: 12px 16px; margin-bottom: 0; }
+.oc-coordinator-hub .oc-defense-note p { font-size: 12px; }
+.oc-coordinator-hub .oc-tiny-badge { font-size: 9px; }
+@media (max-width: 1150px) {
+    .oc-control-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .oc-control-group:last-child { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; }
+    .oc-control-group:last-child > h3, .oc-control-group:last-child > p, .oc-control-group:last-child > details { grid-column: 1 / -1; }
+}
+@media (max-width: 720px) {
+    .oc-coordinator-hub > .oc-panel { padding: 18px; }
+    .oc-control-groups { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+    .oc-control-group, .oc-control-group:last-child { display: block; padding: 16px; }
+    .oc-control-actions { align-items: stretch; flex-direction: column; }
+    .oc-coverage-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .oc-coverage-grid .oc-probability { padding: 12px; }
+    .oc-coverage-grid .oc-probability > div:first-child { flex-wrap: wrap; }
+}
+
+.oc-connected .oc-plan-launch {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-height: 44px;
+    max-width: 100%;
+    margin: 12px 0 18px;
+    padding: 12px 18px;
+    border: 1px solid #365b36;
+    border-radius: 8px;
+    background: #365b36;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    text-decoration: none;
+}
+.oc-connected .oc-plan-launch:hover:not(:disabled) { background: #29482a; border-color: #29482a; }
+.oc-connected .oc-plan-launch:focus-visible { outline: 3px solid #92b77a; outline-offset: 3px; }
+.oc-connected .oc-plan-launch svg { flex-shrink: 0; }
+
+.oc-design-controls { margin: 16px 0; padding: 18px; border: 1px solid #dce3d3; border-radius: 10px; background: #f7f9f3; }
+.oc-design-controls label { display: grid; gap: 6px; margin: 10px 0; font-size: 12px; }
+.oc-design-controls input, .oc-design-controls select { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px; border: 1px solid #cbd8be; border-radius: 6px; font: inherit; background: white; color: #31492a; }
+.oc-design-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 720px) { .oc-design-grid { grid-template-columns: minmax(0, 1fr); gap: 0; } }
+
+.oc-connected .oc-alignment-launch { margin: 0; }

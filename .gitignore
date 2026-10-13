@@ -1,5 +1,10 @@
 .env
 
+# Local experimental models and Python caches
+backend/models/decision_support/
+backend/instance/
+__pycache__/
+
 backend/__pycache__/exp_yards_model.cpython-311.pyc
 backend/__pycache__/exp_pass_yards_model.cpython-311.pyc
 backend/__pycache__/exp_run_yards_model.cpython-311.pyc
@@ -28,3 +33,4 @@ backend/models/pbp_situation_model_meta.json
 backend/models/pbp_situation_model.joblib
 backend/models/run_models.joblib
 backend/model_trainers/__pycache__/upload_to_release.cpython-312.pyc
+backend/routeDrawer/__pycache__/playDraw.cpython-312.pyc

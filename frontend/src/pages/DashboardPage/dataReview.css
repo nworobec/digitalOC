@@ -1,0 +1,19 @@
+.oc-data-review { display: grid; gap: 20px; font-size: 12px; line-height: 1.7; }
+.oc-data-review .oc-section-title { flex-wrap: wrap; gap: 12px; }
+.oc-audit-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.oc-audit-metrics p { background: #f0f5e7; padding: 14px; border-radius: 6px; }
+.oc-audit-metrics strong { display: block; font-size: 24px; }
+.oc-data-review details { margin: 14px 0; }
+.oc-data-review summary { cursor: pointer; font-weight: 600; }
+.oc-audit-table { overflow-x: auto; }
+.oc-audit-table table { border-collapse: collapse; width: 100%; }
+.oc-audit-table th, .oc-audit-table td { text-align: left; padding: 10px; border-bottom: 1px solid #dce3d3; vertical-align: top; }
+.oc-review-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.oc-review-selector { display: block; margin: 16px 0; }
+.oc-review-selector select, .oc-data-review textarea { width: 100%; border: 1px solid #dce3d3; border-radius: 5px; padding: 10px; background: white; color: #31492a; font: inherit; box-sizing: border-box; }
+.oc-data-review .oc-review-checkbox { display: flex; align-items: center; gap: 10px; margin: 16px 0; }
+.oc-data-review .oc-review-checkbox input { width: 18px; height: 18px; margin: 0; }
+.oc-data-review li, .oc-data-review p { overflow-wrap: anywhere; }
+@media (max-width: 720px) { .oc-review-grid, .oc-audit-metrics { grid-template-columns: 1fr; } }
+.oc-review-state { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; padding: 12px; background: #f0f5e7; }
+.oc-source-play { margin: 14px 0; padding: 12px 0; border-bottom: 1px solid #dce3d3; }

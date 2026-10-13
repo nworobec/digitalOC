@@ -1,9 +1,14 @@
 import time
 import json
 from pathlib import Path
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Union, cast
 import numpy as np
 import pandas as pd
+
+try:
+    from .inference import encode_inference, align_inference
+except ImportError:
+    from inference import encode_inference, align_inference
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
@@ -12,11 +17,6 @@ import io
 import sys
 import os
 
-try:
-    from .upload_to_release import upload_model_to_release
-except ImportError: 
-    sys.path.insert(0, os.path.dirname(__file__))
-    from upload_to_release import upload_model_to_release
 
 DATA_FILES = ["../data/merged_pass_model_data_2020.csv"]
 DATA_FILES.append("../data/merged_pass_model_data_2021.csv")
@@ -24,7 +24,6 @@ DATA_FILES.append("../data/merged_pass_model_data_2022.csv")
 DATA_FILES.append("../data/merged_pass_model_data_2023.csv")
 DATA_FILES.append("../data/merged_pass_model_data_2024.csv")
 OUTPUT_DIR = Path("../models")
-OUTPUT_DIR.mkdir(exist_ok=True)
 
 TARGETS = [
     "receiver_position",
@@ -46,12 +45,13 @@ def load_first_existing(files: List[str]) -> pd.DataFrame:
         if p.exists():
             print(f"Loading data from {f}")
             return pd.read_csv(p, low_memory=False)
+    raise FileNotFoundError(f"No pass-model data files found: {files}")
 
 def add_football_intelligence_features(df: pd.DataFrame) -> pd.DataFrame:
     df2 = df.copy()
     #basic safety for missing columns
-    def safe_get(col, default=0):
-        return df2[col] if col in df2.columns else pd.Series([default]*len(df2))
+    def safe_get(col: str, default: Union[int, str] = 0) -> pd.Series:
+        return cast(pd.Series, df2[col]) if col in df2.columns else pd.Series(default, index=df2.index)
 
     df2["yardline_100"] = safe_get("yardline_100", 50)
     df2["goal_to_go"] = safe_get("goal_to_go", 0)
@@ -131,27 +131,28 @@ def build_global_feature_set(df: pd.DataFrame) -> List[str]:
     print(f"Global feature set contains {len(available)} available columns")
     return available
 
-def global_encode(df: pd.DataFrame, features: List[str]) -> Tuple[pd.DataFrame, List[str]]:
+def global_encode(df: pd.DataFrame, features: List[str], *, inference: bool = False) -> Tuple[pd.DataFrame, List[str]]:
     """Create a single encoded feature matrix used by all targets."""
-    X = df[features].copy()
+    X = df.loc[:, features].copy()
     #fill numeric na with median, categorical with 'NA'
-    for col in X.columns:
-        if X[col].dtype.kind in "biufc":
-            X[col] = X[col].fillna(X[col].median())
+    for col in features:
+        column = cast(pd.Series, X[col])
+        if column.dtype.kind in "biufc":
+            X[col] = column.fillna(column.median())
         else:
             #Convert categorical columns to plain string dtype first, then fill NAs
-            X[col] = X[col].astype("string").fillna("NA")
+            X[col] = column.astype("string").fillna("NA")
 
     #one-hot encode categoricals via pd.get_dummies (drop_first to keep smaller)
-    X_encoded = pd.get_dummies(X, drop_first=True)
+    X_encoded = encode_inference(X) if inference else pd.get_dummies(X, drop_first=True)
     feature_cols = X_encoded.columns.tolist()
     print(f"Encoded global feature matrix with {len(feature_cols)} columns")
     return X_encoded, feature_cols
 
 def filter_rare_classes_simple(y: pd.Series, min_samples: int = MIN_SAMPLES_PER_CLASS) -> pd.Series:
     """Combine very rare classes into 'OTHER' or drop if too few samples."""
-    counts = y.value_counts()
-    rare = counts[counts < min_samples].index
+    counts = cast(pd.Series, y.value_counts())
+    rare = counts.loc[counts < min_samples].index
     if len(rare) == 0:
         return y
     y2 = y.copy().astype(str)
@@ -175,10 +176,10 @@ def prepare_for_target(df: pd.DataFrame, X_global: pd.DataFrame, target: str) ->
     #handle rare classes
     y = filter_rare_classes_simple(y)
     #drop rows where target became OTHER but still too rare
-    counts = y.value_counts()
+    counts = cast(pd.Series, y.value_counts())
     if (counts < MIN_SAMPLES_PER_CLASS).any():
         #drop undersized classes
-        keep = y.isin(counts[counts >= MIN_SAMPLES_PER_CLASS].index)
+        keep = y.isin(counts.loc[counts >= MIN_SAMPLES_PER_CLASS].index)
         X = X.loc[keep]
         y = y.loc[keep]
     return X, y
@@ -193,6 +194,11 @@ def train_target_model(X: pd.DataFrame, y: pd.Series, target: str) -> Dict[str, 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
     )
+    # train_test_split preserves pandas containers, despite its broad library annotations.
+    X_train = cast(pd.DataFrame, X_train)
+    X_test = cast(pd.DataFrame, X_test)
+    y_train = cast(pd.Series, y_train)
+    y_test = cast(pd.Series, y_test)
     #choose RandomForest (robust for categorical-heavy data)
     clf = RandomForestClassifier(
         n_estimators=200,
@@ -210,15 +216,15 @@ def train_target_model(X: pd.DataFrame, y: pd.Series, target: str) -> Dict[str, 
     print(f"Accuracy ({target}): {acc:.3f} | Train time: {elapsed:.1f}s")
     #limited classification report for small-class targets
     try:
-        labels = np.union1d(y_test.unique(), y_pred)
-        print(classification_report(y_test, y_pred, labels=labels, zero_division=0))
+        labels = np.union1d(y_test.to_numpy(), y_pred)
+        print(classification_report(y_test, y_pred, labels=labels, zero_division="warn"))
     except Exception:
         pass
     return {
         "model": clf,
         "accuracy": float(acc),
         "train_time_s": elapsed,
-        "classes": clf.classes_.tolist() if hasattr(clf, "classes_") else [],
+        "classes": np.asarray(clf.classes_).tolist(),
         "feature_columns": X_train.columns.tolist(),
     }
 
@@ -266,7 +272,7 @@ def train_pass_models():
     df = load_first_existing(DATA_FILES)
     #filter to pass plays if play_type exists
     if "play_type" in df.columns:
-        df = df[df["play_type"] == "pass"].copy()
+        df = df.loc[df["play_type"] == "pass", :].copy()
     print(f"Initial pass plays: {len(df)}")
     df = add_football_intelligence_features(df)
     trained = train_all_targets(df, TARGETS)
@@ -294,7 +300,7 @@ def predict_pass_metrics(situation, trained_models):
 
     # Prepare the feature set
     features = build_global_feature_set(situation_df)
-    situation_encoded, feature_cols = global_encode(situation_df, features)
+    situation_encoded, feature_cols = global_encode(situation_df, features, inference=True)
     predictions = {}
 
     for target, model_info in trained_models.items():
@@ -307,7 +313,7 @@ def predict_pass_metrics(situation, trained_models):
                 situation_encoded[col] = 0
         
         # Reorder columns to match model's expected input
-        situation_input = situation_encoded[model_features]
+        situation_input = align_inference(situation_encoded, model_features, f"pass.{target}")
 
         # Make prediction
         pred = model.predict(situation_input)
@@ -315,8 +321,93 @@ def predict_pass_metrics(situation, trained_models):
 
     return predictions
 
+def predict_pass_metric_candidates(situation, trained_models, top_k=3):
+    situation_df = pd.DataFrame([situation], columns=[
+        'down', 'ydstogo', 'yardline_100', 'goal_to_go',
+        'quarter_seconds_remaining', 'half_seconds_remaining',
+        'game_seconds_remaining', 'score_differential',
+        'posteam_timeouts_remaining', 'defteam_timeouts_remaining',
+        'posteam', 'defteam',
+        'is_midfield_aggression', 'is_deep_redzone',
+        'prev_is_pass', 'prev_is_run', 'prev_yards_gained',
+        'two_consecutive_runs', 'two_consecutive_passes', 'defense_coverage_type'
+    ])
+
+    situation_df = add_football_intelligence_features(situation_df)
+    features = build_global_feature_set(situation_df)
+    situation_encoded, _ = global_encode(situation_df, features, inference=True)
+
+    results = {}
+
+    required_targets = [
+        "pass_length",
+        "pass_location",
+        "route",
+        "receiver_position",
+        "offense_formation",
+        "offense_personnel"
+    ]
+
+    for target in required_targets:
+        if target not in trained_models:
+            continue
+
+        model_info = trained_models[target]
+        model = model_info["model"]
+        model_features = model_info["feature_columns"]
+
+        for col in model_features:
+            if col not in situation_encoded.columns:
+                situation_encoded[col] = 0
+
+        X = align_inference(situation_encoded, model_features, f"pass.{target}")
+
+        probs = model.predict_proba(X)[0]
+        classes = model.classes_
+
+        actual_k = min(top_k, len(classes))
+        top_indices = np.argsort(probs)[::-1][:actual_k]
+
+        results[target] = [
+            {"label": classes[i], "prob": float(probs[i])}
+            for i in top_indices
+        ]
+
+    missing_targets = [t for t in required_targets if t not in results or len(results[t]) == 0]
+    if missing_targets:
+        raise ValueError(f"Missing predictions for targets: {missing_targets}")
+
+    available_k = min(
+        top_k,
+        len(results["pass_length"]),
+        len(results["pass_location"]),
+        len(results["route"]),
+        len(results["receiver_position"])
+    )
+
+    plays = []
+    for i in range(available_k):
+        play = {
+            "pass_length": results["pass_length"][i]["label"],
+            "pass_location": results["pass_location"][i]["label"],
+            "route": results["route"][i]["label"],
+            "receiver_position": results["receiver_position"][i]["label"],
+            "offense_formation": results["offense_formation"][0]["label"],
+            "offense_personnel": results["offense_personnel"][0]["label"],
+            "confidence": results["pass_length"][i]["prob"]
+        }
+        plays.append(play)
+
+    return plays
 
 if __name__ == "__main__":
+    # Import publishing dependencies only when this training script is executed.
+    try:
+        from .upload_to_release import upload_model_to_release
+    except ImportError:
+        sys.path.insert(0, os.path.dirname(__file__))
+        from upload_to_release import upload_model_to_release
+
     # Train the Pass models when running this file separately
     model = train_pass_models()
 
