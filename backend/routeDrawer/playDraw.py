@@ -148,12 +148,18 @@ def draw_field(ax, ydstogo, yardline_100):
 
 # PLAYER POSITIONING
 
+OFF_LINE_Y = -1
+
 def normalize_route(route):
     """Map model route labels to the route families supported by the drawer."""
     if pd.isna(route):
         return 'UNKNOWN'
     key = str(route).strip().upper()
-    return {'QUICK OUT': 'OUT', 'DEEP OUT': 'OUT'}.get(key, key)
+    return {
+        'QUICK OUT': 'OUT', 'DEEP OUT': 'OUT',
+        'HITCH/CURL': 'HITCH', 'IN/DIG': 'IN',
+        'SHALLOW CROSS/DRAG': 'DRAG',
+    }.get(key, key)
 
 # Routes that break outward — typically run from the slot (inside alignment)
 SLOT_ROUTES = {'OUT', 'FLAT', 'CORNER', 'WHEEL', 'SCREEN', 'CROSS', 'SLANT'}
@@ -189,14 +195,14 @@ def get_start_position(position, pass_location, formation, route=None):
         return (-2, backfield_y) if location_side == 'left' else (2, backfield_y)
 
     elif position == 'TE':
-        return (-5, -0.5) if location_side == 'left' else (5, -0.5)
+        return (-5, OFF_LINE_Y) if location_side == 'left' else (5, OFF_LINE_Y)
 
     elif position == 'WR':
         # Fixed positions: outside=±18, inside=±8
         # The concept logic determines which receiver runs which route
         route_key = normalize_route(route)
         if route_key in SLOT_ROUTES:
-            return (-12, -0.5) if location_side == 'left' else (12, -0.5)
+            return (-12, OFF_LINE_Y) if location_side == 'left' else (12, OFF_LINE_Y)
         else:
             return (-18, -0.5) if location_side == 'left' else (18, -0.5)
 
@@ -229,7 +235,7 @@ def get_companion_start_position(primary_pos, pass_location, companion_pref, for
     if abs(comp_x - primary_x) < 5:
         comp_x = comp_x + (5 if comp_x > 0 else -5)
 
-    return (comp_x, -0.5)
+    return (comp_x, OFF_LINE_Y if companion_pref == 'inside' else -0.5)
 
 
 # ROUTE PATHS
@@ -350,11 +356,11 @@ def get_default_alignments(personnel_counts, formation, play_type='pass', locati
 
     WR_SLOTS = [
         (-18, -0.5), (18, -0.5),
-        (-11, -1),   (11, -1),
-        (7,  -0.5),  (-7, -0.5),
+        (-11, OFF_LINE_Y), (11, OFF_LINE_Y),
+        (7, OFF_LINE_Y),   (-7, OFF_LINE_Y),
     ]
-    TE_SLOT_RIGHT = (5.5, -1)
-    TE_SLOT_LEFT  = (-5.5, -1)
+    TE_SLOT_RIGHT = (5.5, OFF_LINE_Y)
+    TE_SLOT_LEFT  = (-5.5, OFF_LINE_Y)
 
     is_run = play_type == 'run'
     run_side = str(location).lower() if location else ''
@@ -522,7 +528,7 @@ def visualize_play(play_data):
                     companion_is_te = True
                     te_available -= 1 # Consume the TE
                     sign = -1 if companion_start[0] < 0 else 1
-                    companion_start = (sign * 5, -1) # Force TE alignment
+                    companion_start = (sign * 5, OFF_LINE_Y) # Force TE alignment
                 
                 companion_path = get_route_path(
                     companion_route,
@@ -562,13 +568,13 @@ def visualize_play(play_data):
                     backside_primary_is_te = True
                     te_available -= 1
                     sign = -1 if backside_primary_start[0] < 0 else 1
-                    backside_primary_start = (sign * 5, -1) # Force TE alignment
+                    backside_primary_start = (sign * 5, OFF_LINE_Y) # Force TE alignment
                     
                 elif backside_companion_pref == 'inside':
                     backside_companion_is_te = True
                     te_available -= 1
                     sign = -1 if backside_companion_start[0] < 0 else 1
-                    backside_companion_start = (sign * 5, -1) # Force TE alignment
+                    backside_companion_start = (sign * 5, OFF_LINE_Y) # Force TE alignment
             
             # Build routes only after personnel assignment finalizes alignment.
             backside_primary_path = get_route_path(
