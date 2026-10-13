@@ -40,7 +40,7 @@ const Result = () => {
         suggestedPlayType: situationData?.suggestedPlayType || '',
         suggestedPlays: situationData?.suggestedPlays || [],
         playHistory: situationData?.playHistory || [], 
-        actualPlayType: 'run', // lets the user select what play actually ran
+        actualPlayType: 'run', 
         defenseCoverage: situationData?.defenseCoverage || 'UNKNOWN'
     });
 
@@ -50,6 +50,43 @@ const Result = () => {
             [field]: value
         }));
     };
+
+    const submitUpdatedSituation = async () => {
+        // Calculate necessary values
+        const ydLine100 = (editableData.ownOppMidfield === "own" ? 100 - parseInt(editableData.ydLine50) : editableData.ownOppMidfield === "midfield" ? 50 : editableData.ownOppMidfield === "opp" ? parseInt(editableData.ydLine50) : undefined);
+        const goalToGo = (ydLine100 === parseInt(editableData.ydsToGo) ? 1 : 0);
+        const scoreDiff = parseInt(editableData.offensePoints) - parseInt(editableData.defensePoints);
+        const quarterSeconds = await calculateQtrSeconds(editableData.minutes, editableData.seconds);
+        const halfSeconds = await calculateHalfSeconds(editableData.quarter, editableData.minutes, editableData.seconds);
+        const gameSeconds = await calculateGameSeconds(editableData.quarter, editableData.minutes, editableData.seconds);
+
+        // Sequence Logic
+        const oldYdLine100 = situationData.ydLine100 || 50; 
+        const yardsGained = oldYdLine100 - ydLine100; 
+
+        const updatedPlayHistory = [
+            ...editableData.playHistory, 
+            { play_type: editableData.actualPlayType, yards_gained: yardsGained }
+        ];
+
+        const currentSituation = {
+            down: parseInt(editableData.down),
+            ydstogo: parseInt(editableData.ydsToGo),
+            yardline_100: ydLine100,
+            goal_to_go: goalToGo,
+            quarter_seconds_remaining: quarterSeconds,
+            half_seconds_remaining: halfSeconds,
+            game_seconds_remaining: gameSeconds,
+            score_differential: scoreDiff,
+            posteam_timeouts_remaining: parseInt(editableData.offenseTimeouts),
+            defteam_timeouts_remaining: parseInt(editableData.defenseTimeouts),
+            posteam: editableData.offenseTeam,
+            defteam: editableData.defenseTeam,
+            defense_coverage_type: editableData.defenseCoverage
+        };
+
+        let newScoutingReport = null;
+        let newPlayVisualization = null;
 
     const submitUpdatedSituation = async (recordPlay = false) => {
         if (updateInFlight.current) return;
@@ -87,6 +124,13 @@ const Result = () => {
             const newSuggestedPlays = normalizeSuggestedPlays(data);
             if (!newSuggestedPlays.length) throw new Error('The backend returned no suggested plays.');
 
+            const data = await response.json();
+            newScoutingReport = data.scouting_report;
+            newPlayVisualization = data.play_visualization;
+            
+            setVisualizationImage(`data:image/png;base64,${newPlayVisualization}`);
+            setScoutingReport(newScoutingReport);
+
             // Commit the next baseline only after a successful response; retries cannot add phantom plays.
             previousSituation.current = currentSituation;
             setNewDrive(false);
@@ -108,10 +152,17 @@ const Result = () => {
             updateInFlight.current = false;
             setIsUpdating(false);
         }
+
+        setEditableData(prev => ({
+            ...prev,
+            playVisualization: newPlayVisualization,
+            playHistory: updatedPlayHistory
+        }));
     };
 
     useEffect(() => {
         console.log("Received situation data:", situationData);
+        if (situationData?.playVisualization) {
 
         // Set play visualization image when the page loads or when situationData changes
         if (situationData?.suggestedPlays?.[0]?.play_visualization) {
@@ -119,7 +170,6 @@ const Result = () => {
         } else if (situationData?.playVisualization) {
             setVisualizationImage(`data:image/png;base64,${situationData.playVisualization}`);
         }
-
     }, [situationData]);
 
     const formatLabel = (value) => {
@@ -377,6 +427,53 @@ const Result = () => {
 
                 <div className="right-column">
                     <div className="visualization-container">
+                        <h2>Top Play Visualization:</h2>
+                        <img src={visualizationImage} alt="Play Visualization" className="visualization-image" />
+                        <br />
+                        
+                        {/* NEW SCOUTING DASHBOARD */}
+                        {scoutingReport && (
+                            <div className="scouting-dashboard" style={{ marginTop: '20px', textAlign: 'left', background: '#000000', padding: '15px', borderRadius: '8px' }}>
+                                <h2>Opponent Tendencies</h2>
+                                
+                                <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '15px' }}>
+                                    <div style={{ padding: '10px', background: scoutingReport.pbp_tendency.primary_tendency === 'PASS' ? '#d4edda' : 'transparent', borderRadius: '5px' }}>
+                                        <strong>Pass Probability:</strong> {(scoutingReport.pbp_tendency.pass_probability * 100).toFixed(1)}%
+                                    </div>
+                                    <div style={{ padding: '10px', background: scoutingReport.pbp_tendency.primary_tendency === 'RUN' ? '#d4edda' : 'transparent', borderRadius: '5px' }}>
+                                        <strong>Run Probability:</strong> {(scoutingReport.pbp_tendency.run_probability * 100).toFixed(1)}%
+                                    </div>
+                                </div>
+
+                                {scoutingReport.pbp_tendency.primary_tendency === 'PASS' && scoutingReport.pass_tendencies && (
+                                    <div className="pass-tendencies">
+                                        <h3>Top Pass Routes</h3>
+                                        <ul>
+                                            {scoutingReport.pass_tendencies.route.map((r, i) => (
+                                                <li key={i}>{r.label.toUpperCase()} - {(r.probability * 100).toFixed(1)}%</li>
+                                            ))}
+                                        </ul>
+                                        <h3>Top Target Areas</h3>
+                                        <ul>
+                                            {scoutingReport.pass_tendencies.pass_target_area.map((t, i) => (
+                                                <li key={i}>{t.label.replace('_', ' ').toUpperCase()} - {(t.probability * 100).toFixed(1)}%</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                {scoutingReport.pbp_tendency.primary_tendency === 'RUN' && scoutingReport.run_tendencies && (
+                                    <div className="run-tendencies">
+                                        <h3>Top Run Lanes</h3>
+                                        <ul>
+                                            {scoutingReport.run_tendencies.run_tendencies.map((r, i) => (
+                                                <li key={i}>{r.run_lane.replace('_', ' ').toUpperCase()} - {(r.probability * 100).toFixed(1)}%</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                         <h2>Suggested Plays:</h2>
                         <div className="play-options">
                             {editableData.suggestedPlays.length > 0 ? (

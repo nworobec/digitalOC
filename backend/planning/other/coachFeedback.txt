@@ -1,0 +1,12 @@
+OC (Could convert DigitalOC into something like this):
+Instead of having something that tells you what to run on offense,
+have something that tells you what the defense is most likely going to do
+- any way to get RPI football data? train on that?
+
+DC: (Talked more about potential ideas for other software, not necessarily DigitalOC)
+Heatmap of where an offense likes to throw the ball, 
+- coverages that defend their most thrown-to areas of the field
+- routes/concepts that exploit those coverages
+similar thing with fronts/blitzes against runs
+- which runs exploit certain fronts/blitzes
+- which fronts/blitzes work best against certain runs

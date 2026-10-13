@@ -148,6 +148,19 @@ def draw_field(ax, ydstogo, yardline_100):
 
 # PLAYER POSITIONING
 
+OFF_LINE_Y = -1
+
+def normalize_route(route):
+    """Map model route labels to the route families supported by the drawer."""
+    if pd.isna(route):
+        return 'UNKNOWN'
+    key = str(route).strip().upper()
+    return {
+        'QUICK OUT': 'OUT', 'DEEP OUT': 'OUT',
+        'HITCH/CURL': 'HITCH', 'IN/DIG': 'IN',
+        'SHALLOW CROSS/DRAG': 'DRAG',
+    }.get(key, key)
+
 # Routes that break outward — typically run from the slot (inside alignment)
 SLOT_ROUTES = {'OUT', 'FLAT', 'CORNER', 'WHEEL', 'SCREEN', 'CROSS', 'SLANT'}
 
@@ -182,14 +195,14 @@ def get_start_position(position, pass_location, formation, route=None):
         return (-2, backfield_y) if location_side == 'left' else (2, backfield_y)
 
     elif position == 'TE':
-        return (-5, -0.5) if location_side == 'left' else (5, -0.5)
+        return (-5, OFF_LINE_Y) if location_side == 'left' else (5, OFF_LINE_Y)
 
     elif position == 'WR':
         # Fixed positions: outside=±18, inside=±8
         # The concept logic determines which receiver runs which route
-        route_key = str(route).upper() if route else 'UNKNOWN'
+        route_key = normalize_route(route)
         if route_key in SLOT_ROUTES:
-            return (-6, -0.5) if location_side == 'left' else (6, -0.5)
+            return (-12, OFF_LINE_Y) if location_side == 'left' else (12, OFF_LINE_Y)
         else:
             return (-18, -0.5) if location_side == 'left' else (18, -0.5)
 
@@ -222,15 +235,13 @@ def get_companion_start_position(primary_pos, pass_location, companion_pref, for
     if abs(comp_x - primary_x) < 5:
         comp_x = comp_x + (5 if comp_x > 0 else -5)
 
-    return (comp_x, -0.5)
+    return (comp_x, OFF_LINE_Y if companion_pref == 'inside' else -0.5)
 
 
 # ROUTE PATHS
 
 def get_route_path(route_name, start_pos, position, location, air_yards):
-    if pd.isna(route_name):
-        route_name = "UNKNOWN"
-    route_key = str(route_name).upper()
+    route_key = normalize_route(route_name)
 
     start_x, start_y = start_pos
     is_left_side = start_x < 0
@@ -304,10 +315,16 @@ def get_run_path(run_location, run_gap, start_pos):
 # PERSONNEL PARSING & ALIGNMENT
 
 def parse_personnel(personnel_str):
+    """Accept compact personnel codes (11) or lists (1 RB, 1 TE, 3 WR)."""
     counts = {'RB': 0, 'TE': 0, 'WR': 0}
     if pd.isna(personnel_str):
         return counts
-    personnel_str = str(personnel_str).replace('"', '')
+    personnel_str = str(personnel_str).replace('"', '').strip()
+    if len(personnel_str) == 2 and personnel_str.isascii() and personnel_str.isdigit():
+        rb_count, te_count = map(int, personnel_str)
+        if rb_count + te_count <= 5:
+            return {'RB': rb_count, 'TE': te_count, 'WR': 5 - rb_count - te_count}
+        return counts
     for part in personnel_str.split(','):
         part = part.strip()
         pieces = part.split(' ')
@@ -339,11 +356,11 @@ def get_default_alignments(personnel_counts, formation, play_type='pass', locati
 
     WR_SLOTS = [
         (-18, -0.5), (18, -0.5),
-        (-11, -1),   (11, -1),
-        (7,  -0.5),  (-7, -0.5),
+        (-11, OFF_LINE_Y), (11, OFF_LINE_Y),
+        (7, OFF_LINE_Y),   (-7, OFF_LINE_Y),
     ]
-    TE_SLOT_RIGHT = (5.5, -1)
-    TE_SLOT_LEFT  = (-5.5, -1)
+    TE_SLOT_RIGHT = (5.5, OFF_LINE_Y)
+    TE_SLOT_LEFT  = (-5.5, OFF_LINE_Y)
 
     is_run = play_type == 'run'
     run_side = str(location).lower() if location else ''
@@ -356,6 +373,7 @@ def get_default_alignments(personnel_counts, formation, play_type='pass', locati
 
     OFFSET_RB_SLOTS  = [(2, -5), (-2, -5)]
     I_FORM_RB_SLOTS  = [(0, -3), (0, -5)]
+    SINGLEBACK_FB_SLOTS = [(2, -3), (-2, -3)] #used if FB is in personnel and singleback is formation
     PISTOL_RB_SLOTS  = [(0, backfield_y), (-4, -4) if run_side == 'left' else (4, -4)]
 
     available_wr_slots = WR_SLOTS.copy()
@@ -460,8 +478,6 @@ def visualize_play(play_data):
     path            = []
     companion_path       = []
     companion_start      = None
-    third_receiver_start = None
-    third_receiver_path  = []
     
     # Backside concept variables
     backside_primary_start = None
@@ -470,12 +486,14 @@ def visualize_play(play_data):
     backside_companion_path = []
     backside_concept_name = None
     backside_companion_is_te = False
+    backside_primary_is_te = False
 
     route   = play_data.get('route')
     run_gap = play_data.get('run_gap')
+    explicit_type = play_data.get('play_type')
 
     # ---- PASS PLAY ----
-    if pd.notna(route):
+    if explicit_type == 'pass' or pd.notna(route):
         play_type  = 'pass'
         route      = play_data.get('route')
         location   = play_data.get('pass_location')
@@ -486,9 +504,14 @@ def visualize_play(play_data):
         path      = get_route_path(route, start_pos, position, location, air_yards)
 
         # --- Concept Logic ---
-        route_key = str(route).upper()
+        route_label = str(route).strip().upper()
+        route_key = normalize_route(route)
         concept_fn = ROUTE_CONCEPTS.get(route_key)
-        companion_is_te = False  # track if companion is a TE
+        companion_is_te = False 
+        
+        # Track available TEs so we can assign them to inside alignments
+        pc_check_temp = parse_personnel(personnel)
+        te_available = pc_check_temp.get('TE', 0) - (1 if position == 'TE' else 0)
 
         if concept_fn is not None:
             concept_name, companion_route, companion_pref, companion_air = concept_fn(air_yards)
@@ -500,13 +523,12 @@ def visualize_play(play_data):
                 )
                 comp_air = companion_air if companion_air is not None else (air_yards or 5)
                 
-                # Check if we should use a TE for the companion (if 2+ TEs and companion is inside)
-                pc_check_temp = parse_personnel(personnel)
-                has_two_tes = pc_check_temp.get('TE', 0) >= 2
-                if has_two_tes and companion_pref == 'inside':
+                # Check if we should use an available TE for the frontside companion
+                if te_available > 0 and companion_pref == 'inside':
                     companion_is_te = True
-                    # Adjust companion start to TE depth
-                    companion_start = (companion_start[0], -1)
+                    te_available -= 1 # Consume the TE
+                    sign = -1 if companion_start[0] < 0 else 1
+                    companion_start = (sign * 5, OFF_LINE_Y) # Force TE alignment
                 
                 companion_path = get_route_path(
                     companion_route,
@@ -517,54 +539,56 @@ def visualize_play(play_data):
                 )
 
         if concept_name:
-            path_info_str = "Route: {} ({} yds) | Concept: {}".format(route_key, air_yards, concept_name)
+            path_info_str = "Route: {} ({} yds) | Concept: {}".format(route_label, air_yards, concept_name)
         else:
-            path_info_str = "Route: {} ({} yds)".format(route_key, air_yards)
+            path_info_str = "Route: {} ({} yds)".format(route_label, air_yards)
         
         # --- Backside Concept Logic ---
-        # Add a complementary 2-route concept on the opposite side
         if concept_name and concept_name in BACKSIDE_CONCEPTS:
             backside_info = BACKSIDE_CONCEPTS[concept_name]
             (backside_concept_name, backside_primary_route, backside_companion_route,
              backside_companion_pref, backside_primary_air, backside_companion_air) = backside_info
             
-            # Determine backside (opposite of frontside)
             frontside = 'left' if start_pos[0] < 0 else 'right'
             backside = 'right' if frontside == 'left' else 'left'
             
-            # Create backside primary receiver
             backside_primary_start = get_start_position(
                 'WR', backside, formation, route=backside_primary_route
             )
-            backside_primary_path = get_route_path(
-                backside_primary_route, backside_primary_start, 'WR',
-                backside, backside_primary_air
-            )
             
-            # Create backside companion receiver
             backside_companion_start = get_companion_start_position(
                 backside_primary_start, backside, backside_companion_pref,
                 formation, companion_route=backside_companion_route
             )
             
-            # Check if backside companion should be a TE
-            pc_check_back = parse_personnel(personnel)
-            # Account for frontside TE usage
-            frontside_te_used = companion_is_te
-            has_te_for_backside = (pc_check_back.get('TE', 0) >= 2 if frontside_te_used 
-                                   else pc_check_back.get('TE', 0) >= 1)
+            # Check if an available TE should play the backside inside receiver
+            if te_available > 0:
+                if backside_companion_pref == 'outside':
+                    # If companion is outside, the primary MUST be the inside receiver
+                    backside_primary_is_te = True
+                    te_available -= 1
+                    sign = -1 if backside_primary_start[0] < 0 else 1
+                    backside_primary_start = (sign * 5, OFF_LINE_Y) # Force TE alignment
+                    
+                elif backside_companion_pref == 'inside':
+                    backside_companion_is_te = True
+                    te_available -= 1
+                    sign = -1 if backside_companion_start[0] < 0 else 1
+                    backside_companion_start = (sign * 5, OFF_LINE_Y) # Force TE alignment
             
-            if has_te_for_backside and backside_companion_pref == 'inside':
-                backside_companion_is_te = True
-                backside_companion_start = (backside_companion_start[0], -1)
-            
+            # Build routes only after personnel assignment finalizes alignment.
+            backside_primary_path = get_route_path(
+                backside_primary_route, backside_primary_start,
+                'TE' if backside_primary_is_te else 'WR',
+                backside, backside_primary_air
+            )
             backside_companion_path = get_route_path(
                 backside_companion_route, backside_companion_start, 'WR',
                 backside, backside_companion_air
             )
 
     #      RUN PLAY 
-    elif pd.notna(run_gap):
+    elif explicit_type == 'run' or pd.notna(play_data.get('run_location')):
         play_type     = 'run'
         location      = play_data.get('run_location')
         run_gap_val   = play_data.get('run_gap')
@@ -584,11 +608,14 @@ def visualize_play(play_data):
     print(f"  > Formation: {formation}")
     print(f"  > Personnel: {personnel}")
     print(f"  > Play Type: {play_type}")
+    if play_type == 'pass':
+        print(f"  > Predicted Route: {route}")
+        print(f"  > Air Yards: {air_yards}")
     if concept_name:
         print(f"  > Concept:   {concept_name}")
 
     # BUILD FIGURE
-    fig, ax = plt.subplots(figsize=(7, 10))
+    fig, ax = plt.subplots(figsize=(7, 7))
     fig.patch.set_facecolor('#1A1A2E')
 
     draw_field(ax, ydstogo, yardline_100)
@@ -606,25 +633,21 @@ def visualize_play(play_data):
 
     ax.plot(qb_pos[0], qb_pos[1], 'o', color='yellow', markersize=12, label=qb_label)
 
-    # Personnel counts → other players
     personnel_counts = parse_personnel(personnel)
     current_skill_count = sum(personnel_counts.values())
     if current_skill_count < 5:
         personnel_counts['WR'] = personnel_counts.get('WR', 0) + (5 - current_skill_count)
 
-    # Helper to safely deduct a player from the available personnel pool
     def consume_player(pref_pos):
         if personnel_counts.get(pref_pos, 0) > 0:
             personnel_counts[pref_pos] -= 1
         else:
-            # Fallback: if we ran out of the preferred position, 
-            # flex out another available skill player (WR, TE, or RB)
             for fallback_pos in ['WR', 'TE', 'RB']:
                 if personnel_counts.get(fallback_pos, 0) > 0:
                     personnel_counts[fallback_pos] -= 1
                     break
 
-    # Subtract frontside and backside receivers from background count
+    # Subtract frontside and backside receivers from background count based on updated flags
     if position:
         consume_player(position)
         
@@ -632,7 +655,7 @@ def visualize_play(play_data):
         consume_player('TE' if companion_is_te else 'WR')
         
     if backside_primary_start is not None:
-        consume_player('WR')
+        consume_player('TE' if backside_primary_is_te else 'WR')
         
     if backside_companion_start is not None:
         consume_player('TE' if backside_companion_is_te else 'WR')
@@ -645,7 +668,6 @@ def visualize_play(play_data):
     if backside_companion_start is not None:
         occupied_slots.append(backside_companion_start)
 
-    # Determine concept side for pass plays to enforce max 2 receivers per side
     concept_side = None
     if play_type == 'pass' and companion_start is not None:
         concept_side = 'left' if start_pos[0] < 0 else 'right'
@@ -670,7 +692,7 @@ def visualize_play(play_data):
     ax.plot(sx, sy, 'o', color='red', markersize=12, label=plot_label)
     _draw_route(ax, start_pos, path, color='red', lw=3)
 
-    # Draw companion receiver(s) (LIGHT BLUE) — pass plays only
+    # Draw companion receiver(s) (LIGHT BLUE)
     if companion_start is not None and companion_path:
         cx, cy = companion_start
         pos_type = 'TE' if companion_is_te else 'WR'
@@ -678,15 +700,15 @@ def visualize_play(play_data):
         ax.plot(cx, cy, 'o', color="#72CEFF", markersize=12, label=companion_label)
         _draw_route(ax, companion_start, companion_path, color='#72CEFF', lw=3)
     elif companion_start is not None:
-        # Screen concept: companion blocks — just show player, no route
         cx, cy = companion_start
         ax.plot(cx, cy, 'o', color='#72CEFF', markersize=12,
                 label='Blocker / No Route')
 
     if backside_primary_start is not None:
         bx, by = backside_primary_start
+        pos_type = 'TE' if backside_primary_is_te else 'WR'
         ax.plot(bx, by, 'o', color='#72CEFF', markersize=12,
-                label='Backside Primary ({})'.format(backside_concept_name))
+                label='Backside Primary {} ({})'.format(pos_type, backside_concept_name))
         _draw_route(ax, backside_primary_start, backside_primary_path, color='#72CEFF', lw=3)
     
     if backside_companion_start is not None:
@@ -704,7 +726,6 @@ def visualize_play(play_data):
     ax.set_title(title_text, fontsize=11, color='white', pad=10)
     fig.patch.set_facecolor('#1A1A2E')
 
-    # Legend
     handles, labels = ax.get_legend_handles_labels()
     unique = {}
     for h, l in zip(handles, labels):
@@ -754,86 +775,15 @@ if __name__ == "__main__":
             "pass_length": "medium", "pass_location": "right", "air_yards": 10,
             "run_location": None, "run_gap": None,
             "offense_formation": "SHOTGUN", "offense_personnel": "1 RB, 1 TE, 3 WR",
-            "route": "CROSS", "involved_player_position": "WR"
+            "route": "CROSS", "involved_player_position": "TE"
         },
-        # 4. HITCH (5 yds) → SMASH -> DAGGER
-        {
-            "yardline_100": 20, "down": 2, "ydstogo": 5,
-            "pass_length": "short", "pass_location": "right", "air_yards": 5,
-            "run_location": None, "run_gap": None,
-            "offense_formation": "SHOTGUN", "offense_personnel": "1 RB, 1 TE, 3 WR",
-            "route": "HITCH", "involved_player_position": "WR"
-        },
-        # 5. HITCH (10 yds) → CURLS -> SCISSORS
-        {
-            "yardline_100": 30, "down": 3, "ydstogo": 10,
-            "pass_length": "medium", "pass_location": "left", "air_yards": 10,
-            "run_location": None, "run_gap": None,
-            "offense_formation": "SHOTGUN", "offense_personnel": "1 RB, 1 TE, 3 WR",
-            "route": "HITCH", "involved_player_position": "WR"
-        },
-        # 6. SCREEN
-        {
-            "yardline_100": 45, "down": 1, "ydstogo": 10,
-            "pass_length": "short", "pass_location": "right", "air_yards": -2,
-            "run_location": None, "run_gap": None,
-            "offense_formation": "SHOTGUN", "offense_personnel": "1 RB, 1 TE, 3 WR",
-            "route": "SCREEN", "involved_player_position": "WR"
-        },
-        # 7. OUT → GHOST -> MILLS
-        {
-            "yardline_100": 25, "down": 1, "ydstogo": 10,
-            "pass_length": "short", "pass_location": "left", "air_yards": 8,
-            "run_location": None, "run_gap": None,
-            "offense_formation": "SHOTGUN", "offense_personnel": "1 RB, 1 TE, 3 WR",
-            "route": "OUT", "involved_player_position": "WR"
-        },
-        # 8. IN (9 yds) → DAGGER -> SCISSORS
-        {
-            "yardline_100": 25, "down": 1, "ydstogo": 10,
-            "pass_length": "short", "pass_location": "left", "air_yards": 9,
-            "run_location": None, "run_gap": None,
-            "offense_formation": "SHOTGUN", "offense_personnel": "1 RB, 1 TE, 3 WR",
-            "route": "IN", "involved_player_position": "WR"
-        },
-        # 9. SLANT → DOUBLE SLANTS -> FLANK
-        {
-            "yardline_100": 35, "down": 2, "ydstogo": 6,
-            "pass_length": "short", "pass_location": "right", "air_yards": 5,
-            "run_location": None, "run_gap": None,
-            "offense_formation": "SHOTGUN", "offense_personnel": "1 RB, 1 TE, 3 WR",
-            "route": "SLANT", "involved_player_position": "WR"
-        },
-        # 10. CORNER → SCISSORS -> SLANTS
-        {
-            "yardline_100": 20, "down": 2, "ydstogo": 7,
-            "pass_length": "deep", "pass_location": "right", "air_yards": 12,
-            "run_location": None, "run_gap": None,
-            "offense_formation": "SHOTGUN", "offense_personnel": "1 RB, 1 TE, 3 WR",
-            "route": "CORNER", "involved_player_position": "WR"
-        },
-        # 11. POST → MILLS -> SCISSORS
-        {
-            "yardline_100": 30, "down": 1, "ydstogo": 10,
-            "pass_length": "deep", "pass_location": "right", "air_yards": 14,
-            "run_location": None, "run_gap": None,
-            "offense_formation": "SHOTGUN", "offense_personnel": "1 RB, 1 TE, 3 WR",
-            "route": "POST", "involved_player_position": "WR"
-        },
-        # 12. WHEEL → POST-WHEEL -> SMASH
-        {
-            "yardline_100": 30, "down": 1, "ydstogo": 10,
-            "pass_length": "deep", "pass_location": "right", "air_yards": 15,
-            "run_location": None, "run_gap": None,
-            "offense_formation": "SHOTGUN", "offense_personnel": "1 RB, 1 TE, 3 WR",
-            "route": "WHEEL", "involved_player_position": "WR"
-        },
+        
     ]
-'''
+
     for i, play in enumerate(test_plays):
         out = f'concept_{i+1}_{play["route"].lower()}.png'
         print(f"\n=== Play {i+1}: {play['route']} ===")
         visualize_play(play, save_path=out)
         print(f"  > Saved: {out}")
-        '''
+        
 
