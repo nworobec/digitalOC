@@ -1,4 +1,9 @@
 import pandas as pd
+
+try:
+    from .inference import encode_inference, align_inference
+except ImportError:
+    from inference import encode_inference, align_inference
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression, Ridge, LogisticRegression
@@ -13,11 +18,9 @@ import os
 
 try:
     from .TeamElo import PlayClassifier, get_team_elos
-    from .upload_to_release import upload_model_to_release
 except ImportError:
     sys.path.insert(0, os.path.dirname(__file__))
     from TeamElo import PlayClassifier, get_team_elos
-    from upload_to_release import upload_model_to_release
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -130,7 +133,7 @@ def train_exp_yards_model_pass():
     print(f"Completed passes for yards model: {df_complete.shape[0]}")
 
     X_yards = df_complete[feature_cols]
-    y_yards = df_complete['yards_gained'].clip(-5, 40)  # Wider clip range since these are all completions
+    y_yards = df_complete['epa'].clip(-5, 40)  # Wider clip range since these are all completions
 
     X_train_yd, X_test_yd, y_train_yd, y_test_yd = train_test_split(
         X_yards, y_yards, test_size=0.2, random_state=42
@@ -206,16 +209,16 @@ def predict_exp_yards_pass(input_dict, completion_model, yards_model):
 
     # One-hot encode categorical columns
     categorical_cols = ['posteam', 'defteam', 'pass_length', 'pass_location', 'offense_formation', 'offense_personnel', 'defense_coverage_type']
-    input_df_encoded = pd.get_dummies(input_df, columns=categorical_cols, drop_first=True)
+    input_df_encoded = encode_inference(input_df, categorical_cols)
 
     # Align with completion model columns and predict P(complete)
     cp_cols = completion_model.feature_names_in_
-    input_cp = input_df_encoded.reindex(columns=cp_cols, fill_value=0)
+    input_cp = align_inference(input_df_encoded, cp_cols, "pass.completion")
     p_complete = completion_model.predict_proba(input_cp)[:, 1][0]
 
     # Align with yards model columns and predict E[yards | complete]
     yd_cols = yards_model.feature_names_in_
-    input_yd = input_df_encoded.reindex(columns=yd_cols, fill_value=0)
+    input_yd = align_inference(input_df_encoded, yd_cols, "pass.outcome")
     yards_if_complete = yards_model.predict(input_yd)[0]
 
     expected_yards = p_complete * yards_if_complete
@@ -224,6 +227,11 @@ def predict_exp_yards_pass(input_dict, completion_model, yards_model):
 
 
 if __name__ == "__main__":
+    try:
+        from .upload_to_release import upload_model_to_release
+    except ImportError:
+        from upload_to_release import upload_model_to_release
+
     # Save the completion probability and yards-if-complete models to GitHub Releases
     completion_model, yards_model = train_exp_yards_model_pass()
     upload_model_to_release(completion_model, "completion_prob_model.joblib", "completion-prob-model")

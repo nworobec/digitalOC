@@ -63,6 +63,56 @@ export async function calculateGameSeconds(qtr, minutes, seconds) {
     return seconds + (minutes * 60); 
 }
 
+export async function fetchSuggestedPlay(payload) {
+    let lastError = null;
+    const REACT_APP_BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
+
+    try {
+        const response = await fetch(`${REACT_APP_BACKEND_URL}/suggestPlay`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const requestId = response.headers.get('X-Request-ID');
+        console.info('suggestPlay completed', { requestId, status: response.status });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Request ${requestId || 'unknown'} returned ${response.status}: ${errorText}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        lastError = error;
+        console.warn(`Could not reach backend at ${REACT_APP_BACKEND_URL}:`, error);
+    }
+
+    throw new Error(`Could not reach the backend at ${REACT_APP_BACKEND_URL}. Last error: ${lastError?.message || 'unknown error'}`);
+}
+
+export const normalizeSuggestedPlays = (data) => {
+    if (Array.isArray(data)) {
+        return data;
+    }
+
+    const plays = data?.plays || data?.play_outputs || data?.outputs || data?.suggestions || data?.suggested_plays;
+    if (Array.isArray(plays)) {
+        return plays;
+    }
+
+    if (data?.expected_yards || data?.play_visualization || data?.play_data) {
+        return [{
+            rank: 1,
+            play_type: data.play_type,
+            expected_yards: data.expected_yards,
+            play_visualization: data.play_visualization,
+            play_data: data.play_data || {}
+        }];
+    }
+
+    return [];
+};
+
 const Situation = () => {
     const navigate = useNavigate();
     const secondsInputRef = useRef(null);
@@ -327,29 +377,32 @@ const Situation = () => {
             defense_coverage_type: defenseCoverage
         };
 
-        let expYards = null;
-        let playVisualization = null;
+        let suggestedPlays = [];
+        let suggestedPlayType = null;
 
         try {
-            const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/suggestPlay`, { 
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    current_situation: currentSituation,
-                    play_history: [] // Starts empty for the very first play of the scenario
-                })
+            const data = await fetchSuggestedPlay({
+                current_situation: currentSituation,
+                play_history: [] // Starts empty for the very first play of the scenario
             });
 
-            const data = await response.json();
-            expYards = data.expected_yards;
-            playVisualization = data.play_visualization;
-            console.log("Expected Yards:", expYards);
+            console.log("Backend response:", data);
+            suggestedPlays = normalizeSuggestedPlays(data);
+            suggestedPlayType = data.play_type || null;
+            console.log("Suggested Plays:", suggestedPlays);
             
         } catch (error) {
             console.error("Error calling Flask endpoint:", error);
+            alert(`Could not get play suggestions from the backend.\n\n${error.message}`);
+            return;
         }
 
-        const situationArray = `${down}, ${ydsToGo}, ${ydLine100}, ${goalToGo}, ${qtrSeconds}, ${halfSeconds}, ${gameSeconds}, ${scoreDiff}, ${finalOffenseTimeouts}, ${finalDefenseTimeouts}, ${offenseTeam}, ${defenseTeam}, ${defenseCoverage}`;
+        if (suggestedPlays.length === 0) {
+            alert("The backend responded, but it did not include any suggested plays. Check the browser console for the full backend response.");
+            return;
+        }
+
+        const situationArray = `${down}, ${ydsToGo}, ${ydLine100}, ${goalToGo}, ${qtrSeconds}, ${halfSeconds}, ${gameSeconds}, ${scoreDiff}, ${finalOffenseTimeouts}, ${finalDefenseTimeouts}, ${offenseTeam}, ${defenseTeam}`;
         
         // Navigate to result page with situation data and show the play visualization
         navigate('/result', { 
@@ -369,8 +422,11 @@ const Situation = () => {
                 offenseTimeouts: finalOffenseTimeouts,
                 defenseTimeouts: finalDefenseTimeouts,
                 defenseCoverage,
-                expYards,
-                playVisualization
+                ydLine100: ydLine100,
+                suggestedPlayType,
+                suggestedPlays,
+                expYards: suggestedPlays[0]?.expected_yards || '',
+                playVisualization: suggestedPlays[0]?.play_visualization || null
             } 
         });
 

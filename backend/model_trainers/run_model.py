@@ -1,6 +1,11 @@
 import pandas as pd
+
+try:
+    from .inference import encode_inference, align_inference
+except ImportError:
+    from inference import encode_inference, align_inference
 import numpy as np
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, cast
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
@@ -15,12 +20,10 @@ import io
 try:
     from .parse_personnel import add_personnel_features
     from .add_participation_features import add_participation_features
-    from .upload_to_release import upload_model_to_release
 except ImportError:
     sys.path.insert(0, os.path.dirname(__file__))
     from parse_personnel import add_personnel_features
     from add_participation_features import add_participation_features
-    from upload_to_release import upload_model_to_release
     
 
 
@@ -43,14 +46,16 @@ def train_run_models() -> Dict[str, Dict[str, Any]]:
 
     # Filter for designed runs only
     # This prevents scrambles (intended passes) from biasing the run model
-    df_filtered = df[(df["play_type"] == "run") & (df["qb_scramble"] == 0)].copy()
+    df_filtered = df.loc[(df["play_type"] == "run") & (df["qb_scramble"] == 0), :].copy()
 
     if df_filtered.empty:
         print("No 'run' plays found. Exiting.")
         return {}
 
+    part_df: Optional[pd.DataFrame]
+    game_key_col: Optional[str] = None
     try:
-        part_df: pd.DataFrame = pd.read_csv(
+        part_df = pd.read_csv(
             "../data/pbp_participation_2024.csv",
             low_memory=False,
         )
@@ -60,7 +65,7 @@ def train_run_models() -> Dict[str, Dict[str, Any]]:
 
     if part_df is not None:
         if "old_game_id" in df_filtered.columns and "old_game_id" in part_df.columns:
-            game_key_col: str = "old_game_id"
+            game_key_col = "old_game_id"
         elif "game_id" in df_filtered.columns and "game_id" in part_df.columns:
             game_key_col = "game_id"
         else:
@@ -73,7 +78,10 @@ def train_run_models() -> Dict[str, Dict[str, Any]]:
             if col in part_df.columns:
                 keep_cols.append(col)
 
-        part_df = part_df[keep_cols].drop_duplicates(subset=[game_key_col, "play_id"])
+        # The pandas source annotations also permit None for the inplace overload.
+        part_df = cast(pd.DataFrame, part_df.loc[:, keep_cols].drop_duplicates(
+            subset=[game_key_col, "play_id"], inplace=False
+        ))
         df_filtered = pd.merge(df_filtered, part_df, on=[game_key_col, "play_id"], how="left")
         df_filtered = df_filtered.rename(columns={"offense_personnel": "personnel_off", "defense_personnel": "personnel_def"})
         df_filtered = add_personnel_features(df_filtered)
@@ -82,7 +90,8 @@ def train_run_models() -> Dict[str, Dict[str, Any]]:
     # pre-processing
     for col in ["temp", "wind"]:
         if col in df_filtered.columns:
-            df_filtered[col] = df_filtered[col].fillna(float(df_filtered[col].median()))
+            column = cast(pd.Series, df_filtered[col])
+            df_filtered[col] = column.fillna(column.median())
 
     required_cols = ["yardline_100", "goal_to_go", "ydstogo", "down", "quarter_seconds_remaining", "qtr", "score_differential"]
 
@@ -113,10 +122,11 @@ def train_run_models() -> Dict[str, Dict[str, Any]]:
 
     for num_col in personnel_numeric:
         if num_col in df_filtered.columns:
-            df_filtered[num_col] = df_filtered[num_col].fillna(0)
+            column = cast(pd.Series, df_filtered[num_col])
+            df_filtered[num_col] = column.fillna(0)
 
     existing_features = [col for col in feature_columns if col in df_filtered.columns]
-    X = df_filtered[existing_features].copy()
+    X = df_filtered.loc[:, existing_features].copy()
 
     if X.empty:
         return {}
@@ -131,7 +141,7 @@ def train_run_models() -> Dict[str, Dict[str, Any]]:
         if target not in df_filtered.columns:
             continue
 
-        y_tend = df_filtered[target]
+        y_tend = cast(pd.Series, df_filtered[target])
         valid_indices = y_tend.dropna().index
         y_clean = y_tend.loc[valid_indices]
         X_to_use = X_processed.loc[valid_indices].copy()
@@ -147,6 +157,11 @@ def train_run_models() -> Dict[str, Dict[str, Any]]:
         
         X_train, X_test, y_train, y_test = train_test_split(X_clean, y_clean, test_size=0.2, random_state=42, stratify=y_clean)
         
+        # train_test_split retains the DataFrame/Series inputs at runtime.
+        X_train = cast(pd.DataFrame, X_train)
+        X_test = cast(pd.DataFrame, X_test)
+        y_train = cast(pd.Series, y_train)
+        y_test = cast(pd.Series, y_test)
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
@@ -216,10 +231,9 @@ def predict_run_metrics(situation, trained_models):
     situation_df["wind"] = 0  # default value
 
     categorical_cols = ["posteam", "defteam", "roof", "surface", "qtr", "defense_coverage_type"]
-    situation_encoded = pd.get_dummies(
+    situation_encoded = encode_inference(
         situation_df,
-        columns=categorical_cols,
-        drop_first=True,
+        categorical_columns=categorical_cols,
     )
     
     # Get the situation model to predict success probability first
@@ -251,7 +265,9 @@ def predict_run_metrics(situation, trained_models):
                 if col not in situation_encoded.columns:
                     situation_encoded[col] = 0
 
-            situation_for_prediction = situation_encoded[model_columns]
+            situation_for_prediction = align_inference(situation_encoded, model_columns, f"run.{metric}")
+            if model_info.get("scaler") is not None:
+                situation_for_prediction = model_info["scaler"].transform(situation_for_prediction)
             
             # Predict
             prediction = model.predict(situation_for_prediction)[0]
@@ -260,9 +276,97 @@ def predict_run_metrics(situation, trained_models):
 
     return run_metrics
 
+def predict_run_metric_candidates(situation, trained_models, top_k=3):
+    """
+    Return top-k candidate run plays instead of single prediction
+    """
 
+    situation_df = pd.DataFrame([situation], columns=[
+        'down', 'ydstogo', 'yardline_100', 'goal_to_go',
+        'quarter_seconds_remaining','half_seconds_remaining',
+        'game_seconds_remaining','score_differential',
+        'posteam_timeouts_remaining','defteam_timeouts_remaining',
+        'posteam','defteam',
+        'is_midfield_aggression','is_deep_redzone',
+        'prev_is_pass','prev_is_run','prev_yards_gained',
+        'two_consecutive_runs','two_consecutive_passes','defense_coverage_type'
+    ])
+
+    # same feature engineering as before
+    situation_df["is_redzone"] = (situation_df["yardline_100"] <= 20).astype(int)
+    situation_df["is_goal_line"] = ((situation_df["goal_to_go"] == 1) & (situation_df["yardline_100"] <= 10)).astype(int)
+    situation_df["is_short_yardage"] = ((situation_df["ydstogo"] <= 2) & (situation_df["down"] >= 3)).astype(int)
+
+    situation_df["qtr"] = 1 if situation[6] > 2700 else 2 if situation[6] > 1800 else 3 if situation[6] > 900 else 4
+    situation_df["is_two_minute_drill"] = ((situation_df["quarter_seconds_remaining"] <= 120) & situation_df["qtr"].isin([2, 4])).astype(int)
+    situation_df["is_close_game_late"] = ((situation_df["qtr"] == 4) & (situation_df["score_differential"].abs() <= 8)).astype(int)
+    situation_df["shotgun"] = 0
+    situation_df["no_huddle"] = 0
+    situation_df["roof"] = "outdoors"
+    situation_df["surface"] = "grass"
+    situation_df["temp"] = 70
+    situation_df["wind"] = 0
+
+    situation_encoded = encode_inference(
+        situation_df,
+        categorical_columns=["posteam","defteam","roof","surface","qtr","defense_coverage_type"],
+    )
+
+    results = {}
+
+    # get top-k for each metric
+    for metric in ["run_gap", "run_location", "offense_formation", "personnel_off"]:
+        if metric not in trained_models:
+            continue
+
+        model_info = trained_models[metric]
+        model = model_info["model"]
+        model_columns = model_info["columns"]
+
+        for col in model_columns:
+            if col not in situation_encoded.columns:
+                situation_encoded[col] = 0
+
+        X = align_inference(situation_encoded, model_columns, f"run.{metric}")
+        if model_info.get("scaler") is not None:
+            X = model_info["scaler"].transform(X)
+
+        probs = model.predict_proba(X)[0]
+        classes = model.classes_
+
+        top_indices = np.argsort(probs)[::-1][:top_k]
+
+        results[metric] = [
+            {"label": classes[i], "prob": float(probs[i])}
+            for i in top_indices
+        ]
+
+    required = ["run_gap", "run_location", "offense_formation", "personnel_off"]
+    missing = [key for key in required if not results.get(key)]
+    if missing:
+        raise ValueError(f"Missing predictions for targets: {missing}")
+    available_k = min(top_k, len(results["run_gap"]), len(results["run_location"]))
+    plays = []
+    for i in range(available_k):
+        play = {
+            "run_gap": results["run_gap"][i]["label"],
+            "run_location": results["run_location"][i]["label"],
+            "offense_formation": results["offense_formation"][0]["label"],
+            "personnel_off": results["personnel_off"][0]["label"],
+            "confidence": results["run_gap"][i]["prob"]
+        }
+        plays.append(play)
+
+    return plays
 
 if __name__ == "__main__":
+    # Import publishing dependencies only when this training script is executed.
+    try:
+        from .upload_to_release import upload_model_to_release
+    except ImportError:
+        sys.path.insert(0, os.path.dirname(__file__))
+        from upload_to_release import upload_model_to_release
+
     # Train the Run models when running this file separately
     print("Starting all run model training")
     all_models: Dict[str, Dict[str, Any]] = train_run_models()

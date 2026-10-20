@@ -1,0 +1,11 @@
+.oc-coaches-notes {max-width: 1000px; padding: 24px;}
+.oc-coaches-notes fieldset {border: 0; padding: 0; margin-top: 24px; min-width: 0;}
+.oc-coaches-notes label {display: grid; gap: 7px; margin: 12px 0; text-transform: capitalize;}
+.oc-coaches-notes input, .oc-coaches-notes textarea, .oc-coaches-notes select {width: 100%; box-sizing: border-box; font: inherit; padding: 10px; border: 1px solid #ccd5d0; border-radius: 8px; background: white; color: #172e25;}
+.oc-coaches-notes textarea {resize: vertical; min-height: 76px;}
+.oc-coaches-notes h3 {margin-top: 24px;}
+.oc-plan-entry {padding: 16px; margin: 12px 0; border: 1px solid #dce4df; border-radius: 12px;}
+.oc-plan-entry h4 {margin: 0 0 10px;}
+.oc-plan-text {white-space: pre-wrap; overflow-wrap: anywhere;}
+.oc-plan-evidence {margin-top: 24px; padding: 16px; background: #f1f5f2; border-radius: 12px;}
+.oc-coaches-notes .oc-button-row {flex-wrap: wrap;}

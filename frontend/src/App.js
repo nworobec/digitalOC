@@ -4,6 +4,8 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Home from './pages/HomePage/home';
 import Situation from './pages/SituationPage/situation';
 import Result from './pages/ResultPage/result';
+import Preview from './pages/PreviewPage/preview';
+import Dashboard from './pages/DashboardPage/dashboard';
 
 function App() {
   return (
@@ -17,9 +19,12 @@ function App() {
 
         { /* App Routes */ }
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/welcome" element={<Home />} />
           <Route path="/situation" element={<Situation />} />
           <Route path="/result" element={<Result />} />
+          <Route path="/preview" element={<Preview />} />
         </Routes>
       </div>
     </Router>
