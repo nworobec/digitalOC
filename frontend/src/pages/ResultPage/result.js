@@ -85,9 +85,9 @@ const Result = () => {
                 })
             });
 
-            const data = await response.json();
-            newScoutingReport = data.scouting_report;
-            newPlayVisualization = data.play_visualization;
+            const resData = await response.json();
+            newScoutingReport = resData.scouting_report;
+            newPlayVisualization = resData.play_visualization;
             
             setVisualizationImage(`data:image/png;base64,${newPlayVisualization}`);
             setScoutingReport(newScoutingReport);
