@@ -17,7 +17,8 @@ from ..request_logging import install_request_logging
 
 def create_app(model_path=None, *, bundle=None, db_path=None, data_dir=None):
     app = Flask(__name__)
-    origins = os.environ.get("DIGITALOC_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+    local_origins = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001"
+    origins = [origin.strip() for origin in os.environ.get("DIGITALOC_ALLOWED_ORIGINS", local_origins).split(",") if origin.strip()]
     CORS(app, origins=origins, expose_headers=["X-Request-ID"])
     if bundle is None:
         path = Path(model_path) if model_path else DEFAULT_OUTPUT / "baseline.joblib"

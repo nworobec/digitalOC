@@ -11,6 +11,7 @@ const Result = () => {
     const situationData = location.state;
     const [visualizationImage, setVisualizationImage] = useState(null);
     const [selectedPlayIndex, setSelectedPlayIndex] = useState(0);
+    const [scoutingReport, setScoutingReport] = useState(null);
 
     const [isUpdating, setIsUpdating] = useState(false);
     const [newDrive, setNewDrive] = useState(false);
@@ -51,43 +52,6 @@ const Result = () => {
         }));
     };
 
-    const submitUpdatedSituation = async () => {
-        // Calculate necessary values
-        const ydLine100 = (editableData.ownOppMidfield === "own" ? 100 - parseInt(editableData.ydLine50) : editableData.ownOppMidfield === "midfield" ? 50 : editableData.ownOppMidfield === "opp" ? parseInt(editableData.ydLine50) : undefined);
-        const goalToGo = (ydLine100 === parseInt(editableData.ydsToGo) ? 1 : 0);
-        const scoreDiff = parseInt(editableData.offensePoints) - parseInt(editableData.defensePoints);
-        const quarterSeconds = await calculateQtrSeconds(editableData.minutes, editableData.seconds);
-        const halfSeconds = await calculateHalfSeconds(editableData.quarter, editableData.minutes, editableData.seconds);
-        const gameSeconds = await calculateGameSeconds(editableData.quarter, editableData.minutes, editableData.seconds);
-
-        // Sequence Logic
-        const oldYdLine100 = situationData.ydLine100 || 50; 
-        const yardsGained = oldYdLine100 - ydLine100; 
-
-        const updatedPlayHistory = [
-            ...editableData.playHistory, 
-            { play_type: editableData.actualPlayType, yards_gained: yardsGained }
-        ];
-
-        const currentSituation = {
-            down: parseInt(editableData.down),
-            ydstogo: parseInt(editableData.ydsToGo),
-            yardline_100: ydLine100,
-            goal_to_go: goalToGo,
-            quarter_seconds_remaining: quarterSeconds,
-            half_seconds_remaining: halfSeconds,
-            game_seconds_remaining: gameSeconds,
-            score_differential: scoreDiff,
-            posteam_timeouts_remaining: parseInt(editableData.offenseTimeouts),
-            defteam_timeouts_remaining: parseInt(editableData.defenseTimeouts),
-            posteam: editableData.offenseTeam,
-            defteam: editableData.defenseTeam,
-            defense_coverage_type: editableData.defenseCoverage
-        };
-
-        let newScoutingReport = null;
-        let newPlayVisualization = null;
-
     const submitUpdatedSituation = async (recordPlay = false) => {
         if (updateInFlight.current) return;
         updateInFlight.current = true;
@@ -124,12 +88,7 @@ const Result = () => {
             const newSuggestedPlays = normalizeSuggestedPlays(data);
             if (!newSuggestedPlays.length) throw new Error('The backend returned no suggested plays.');
 
-            const data = await response.json();
-            newScoutingReport = data.scouting_report;
-            newPlayVisualization = data.play_visualization;
-            
-            setVisualizationImage(`data:image/png;base64,${newPlayVisualization}`);
-            setScoutingReport(newScoutingReport);
+            setScoutingReport(data.scouting_report || null);
 
             // Commit the next baseline only after a successful response; retries cannot add phantom plays.
             previousSituation.current = currentSituation;
@@ -153,16 +112,11 @@ const Result = () => {
             setIsUpdating(false);
         }
 
-        setEditableData(prev => ({
-            ...prev,
-            playVisualization: newPlayVisualization,
-            playHistory: updatedPlayHistory
-        }));
     };
 
     useEffect(() => {
         console.log("Received situation data:", situationData);
-        if (situationData?.playVisualization) {
+        setScoutingReport(situationData?.scoutingReport || null);
 
         // Set play visualization image when the page loads or when situationData changes
         if (situationData?.suggestedPlays?.[0]?.play_visualization) {

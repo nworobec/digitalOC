@@ -1,4 +1,5 @@
 flask
+certifi
 flask-cors
 gunicorn
 joblib
