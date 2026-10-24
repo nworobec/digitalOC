@@ -2,6 +2,8 @@ import base64
 import io
 import hashlib
 import math
+import ssl
+import certifi
 from flask import Flask, jsonify, request, g
 from flask_cors import CORS
 import joblib
@@ -29,7 +31,9 @@ install_request_logging(app, model_versions)
 
 # Load the PBP, run, pass, and expected yards models from GitHub Releases when the application starts
 def load_model_from_url(url: str):
-    with urllib.request.urlopen(url, timeout=60) as response:
+    context = ssl.create_default_context()
+    context.load_verify_locations(cafile=certifi.where())
+    with urllib.request.urlopen(url, timeout=60, context=context) as response:
         content = response.read()
         buffer = io.BytesIO(content)
     model_versions[url.rsplit("/", 1)[-1]] = hashlib.sha256(content).hexdigest()[:16]
