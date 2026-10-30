@@ -1,0 +1,32 @@
+Other than the model visualization, what else could be shown on the web app?
+
+Visualizations:
+- Situational statistics
+    - What a specific team is most likely to do in a specific situation/similar situations?
+    - More detail about what else a team could run in a situation
+        - Actual pass/run ratio in a situation
+            - Could add more details about what other plays they could run in a situation
+- Statistics of how a team has performed running certain plays
+    - Running in specific directions
+        - Yards per carry
+        - Attempts
+        - Efficient carry rate
+        - Touchdowns
+    - Passing in specific directions/distances
+        - Attempts
+        - Completions
+        - Passer Rating
+        - Touchdowns
+        - Interceptions
+        - Average Depth of Target
+    - Throwing certain routes
+        - Performance of each route they've thrown 
+            - Attempts
+            - Completions
+            - Passer Rating
+            - Touchdowns
+            - Average Depth of Target
+            - Receiver most thrown to (on specific route)
+
+Could also show defensive statistics as well, same metrics as above, 
+just flipped so it is running/passing performance against a team's defense
