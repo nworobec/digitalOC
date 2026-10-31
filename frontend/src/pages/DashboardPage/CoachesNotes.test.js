@@ -43,3 +43,24 @@ test('stale plans block edits and regeneration requires replacement', async () =
     fireEvent.click(screen.getByText('Replace with new draft'));
     await waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
 });
+
+test('assistant proposal stays in review until explicitly saved', async () => {
+    const liveSession = {...session, coaching_plan: undefined, revision: 3};
+    const save = jest.fn().mockResolvedValue(liveSession);
+    const assistant = jest.fn().mockResolvedValue({
+        reply: 'Here is a proposed plan for review.',
+        plan: content,
+        context_id: 'current-context',
+        session_revision: liveSession.revision,
+    });
+    render(<CoachesNotes {...props} session={liveSession} onAssistant={assistant} onSave={save}/>);
+    fireEvent.change(screen.getByLabelText('Message the session assistant'), {target: {value: 'Draft a plan'}});
+    fireEvent.click(screen.getByText('Send message'));
+    await waitFor(() => expect(screen.getByText(/Assistant proposal/)).toBeInTheDocument());
+    expect(await screen.findByText('Here is a proposed plan for review.')).toBeInTheDocument();
+    expect(save).not.toHaveBeenCalled();
+    expect(liveSession.coaching_plan).toBeUndefined();
+    fireEvent.change(screen.getByLabelText('Game-plan notes'), {target: {value: 'Reviewed by coach'}});
+    fireEvent.click(screen.getByText('Save coaching plan'));
+    await waitFor(() => expect(save).toHaveBeenCalledWith('current-context', expect.objectContaining({notes: 'Reviewed by coach'}), 'local_assistant'));
+});

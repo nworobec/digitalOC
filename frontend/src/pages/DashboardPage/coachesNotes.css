@@ -9,3 +9,9 @@
 .oc-plan-text {white-space: pre-wrap; overflow-wrap: anywhere;}
 .oc-plan-evidence {margin-top: 24px; padding: 16px; background: #f1f5f2; border-radius: 12px;}
 .oc-coaches-notes .oc-button-row {flex-wrap: wrap;}
+.oc-assistant-chat {margin: 20px 0; padding: 16px; border: 1px solid #dce4df; border-radius: 12px; background: #fbfcfb;}
+.oc-assistant-chat label {text-transform: none;}
+.oc-assistant-messages {max-height: 360px; overflow-y: auto;}
+.oc-assistant-message {padding: 10px 12px; margin: 10px 0; border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere;}
+.oc-assistant-message.user {background: #eaf1ed;}
+.oc-assistant-message.assistant {background: #f1f5f2;}
