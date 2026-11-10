@@ -91,14 +91,34 @@ def register_plan_routes(app, store, data_dir):
     @app.put('/api/sessions/<session_id>/plan')
     def save_plan(session_id):
         payload = request.get_json(silent=True)
-        if not isinstance(payload, dict) or set(payload) != {'revision', 'mutation_id', 'context_id', 'content'}:
-            raise ValueError('Provide revision, mutation_id, context_id, and content')
+        if (not isinstance(payload, dict)
+                or not {'revision', 'mutation_id', 'context_id', 'content'} <= set(payload)
+                or set(payload) - {'revision', 'mutation_id', 'context_id', 'content', 'source'}
+                or payload.get('source') not in (None, 'local_assistant')):
+            raise ValueError('Provide revision, mutation_id, context_id, content, and optional local_assistant source')
+        initial = store.get(session_id)
+        initial_plan = initial.get('coaching_plan')
+        needs_new_context = not initial_plan or initial_plan.get('context_id') != context_id(initial)
+        evidence = describe_defense(data_dir, initial['state']) if needs_new_context else None
         def apply(session):
+            if session.get('mode') == 'historical_review':
+                raise ValueError('Historical review batches cannot save coaching plans')
+            current_context_id = context_id(session)
+            if payload['context_id'] != current_context_id:
+                raise Conflict('The situation or playbook changed. Refresh the assistant draft before saving.')
             plan = session.get('coaching_plan')
-            if not plan or payload['context_id'] != plan['context_id']:
-                raise Conflict('The plan changed. Reload the saved plan before editing.')
-            if plan['context_id'] != context_id(session):
-                raise Conflict('The situation or playbook changed. Regenerate the plan before saving.')
-            plan.update(content=validate_content(payload['content'], session), edited_by_coach=True, updated_at=now())
+            content = validate_content(payload['content'], session)
+            if plan and plan['context_id'] == current_context_id:
+                plan.update(content=content, edited_by_coach=True, updated_at=now())
+                if payload.get('source') == 'local_assistant':
+                    plan.update(engine='local_assistant', approved_by_coach=True)
+            else:
+                if payload.get('source') != 'local_assistant':
+                    raise ValueError('Review an assistant proposal before creating or replacing a plan')
+                session['coaching_plan'] = dict(
+                    version='coaching-plan-1', engine='local_assistant',
+                    generated_at=now(), updated_at=now(), edited_by_coach=True,
+                    context_id=current_context_id, context=copy.deepcopy(context(session)),
+                    evidence=evidence, content=content, approved_by_coach=True)
             session['_undo'] = None
         return jsonify(public_session(store.mutate(session_id, payload, 'save_plan', apply)))
