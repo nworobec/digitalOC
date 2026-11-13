@@ -64,3 +64,32 @@ test('assistant proposal stays in review until explicitly saved', async () => {
     fireEvent.click(screen.getByText('Save coaching plan'));
     await waitFor(() => expect(save).toHaveBeenCalledWith('current-context', expect.objectContaining({notes: 'Reviewed by coach'}), 'local_assistant'));
 });
+
+test('shows game context and retains response snapshot without sending metadata as history', async () => {
+    const onAssistant = jest.fn().mockResolvedValue({reply: 'Situation\n\nProtect the lead.', plan: null, session_revision: 3,
+        situation_brief: {score: 'KC 21 – BUF 17', clock: 'Q4 · 2:00', down_distance: 'Down 3 · 2 yards to go', field_position: 'Own 40', timeouts: 'Offense 2 · Defense 1', objective: 'clock'}});
+    render(<CoachesNotes {...props} session={{...session, revision: 3}} onAssistant={onAssistant}/>);
+    expect(screen.getByRole('region', {name: 'Situation used by assistant'})).toHaveTextContent('1 & 10');
+    fireEvent.change(screen.getByLabelText('Message the session assistant'), {target: {value: 'Explain'}});
+    fireEvent.click(screen.getByText('Send message'));
+    expect(await screen.findByText(/KC 21 – BUF 17/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Message the session assistant'), {target: {value: 'Why?'}});
+    fireEvent.click(screen.getByText('Send message'));
+    await waitFor(() => expect(onAssistant).toHaveBeenCalledTimes(2));
+    expect(onAssistant.mock.calls[1][1][1]).toEqual({role: 'assistant', content: 'Situation\n\nProtect the lead.'});
+});
+
+
+test('rules draft preserves source and stays unsaved until coach approval', async () => {
+    const liveSession = {...session, coaching_plan: undefined, revision: 3};
+    const save = jest.fn().mockResolvedValue(liveSession);
+    const assistant = jest.fn().mockResolvedValue({reply: 'Prepared a rules-based draft.', plan: content,
+        context_id: 'rules-context', session_revision: 3, provider: 'coaching_rules', proposal_source: 'coaching_rules'});
+    render(<CoachesNotes {...props} session={liveSession} onAssistant={assistant} onSave={save}/>);
+    fireEvent.change(screen.getByLabelText('Message the session assistant'), {target: {value: 'Draft three opening calls'}});
+    fireEvent.click(screen.getByText('Send message'));
+    expect(await screen.findByText('Coaching rules · saved facts and playbook')).toBeInTheDocument();
+    expect(save).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText('Save coaching plan'));
+    await waitFor(() => expect(save).toHaveBeenCalledWith('rules-context', content, 'coaching_rules'));
+});

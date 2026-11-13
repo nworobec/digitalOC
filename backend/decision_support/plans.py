@@ -94,8 +94,8 @@ def register_plan_routes(app, store, data_dir):
         if (not isinstance(payload, dict)
                 or not {'revision', 'mutation_id', 'context_id', 'content'} <= set(payload)
                 or set(payload) - {'revision', 'mutation_id', 'context_id', 'content', 'source'}
-                or payload.get('source') not in (None, 'local_assistant')):
-            raise ValueError('Provide revision, mutation_id, context_id, content, and optional local_assistant source')
+                or payload.get('source') not in (None, 'local_assistant', 'coaching_rules')):
+            raise ValueError('Provide revision, mutation_id, context_id, content, and optional local_assistant or coaching_rules source')
         initial = store.get(session_id)
         initial_plan = initial.get('coaching_plan')
         needs_new_context = not initial_plan or initial_plan.get('context_id') != context_id(initial)
@@ -110,13 +110,13 @@ def register_plan_routes(app, store, data_dir):
             content = validate_content(payload['content'], session)
             if plan and plan['context_id'] == current_context_id:
                 plan.update(content=content, edited_by_coach=True, updated_at=now())
-                if payload.get('source') == 'local_assistant':
-                    plan.update(engine='local_assistant', approved_by_coach=True)
+                if payload.get('source') in ('local_assistant', 'coaching_rules'):
+                    plan.update(engine=payload['source'], approved_by_coach=True)
             else:
-                if payload.get('source') != 'local_assistant':
+                if payload.get('source') not in ('local_assistant', 'coaching_rules'):
                     raise ValueError('Review an assistant proposal before creating or replacing a plan')
                 session['coaching_plan'] = dict(
-                    version='coaching-plan-1', engine='local_assistant',
+                    version='coaching-plan-1', engine=payload['source'],
                     generated_at=now(), updated_at=now(), edited_by_coach=True,
                     context_id=current_context_id, context=copy.deepcopy(context(session)),
                     evidence=evidence, content=content, approved_by_coach=True)

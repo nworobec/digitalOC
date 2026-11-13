@@ -15,3 +15,40 @@
 .oc-assistant-message {padding: 10px 12px; margin: 10px 0; border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere;}
 .oc-assistant-message.user {background: #eaf1ed;}
 .oc-assistant-message.assistant {background: #f1f5f2;}
+
+.oc-coaches-notes {max-width: 1200px; margin: 0 auto; padding: 28px; font-size: 14px; line-height: 1.65;}
+.oc-coaches-notes > .oc-panel-heading h2 {font-size: 24px;}
+.oc-coaches-notes label {text-transform: none; font-size: 13px; font-weight: 600;}
+.oc-coaches-notes h3 {margin: 0; font-size: 17px;}
+.oc-plan-section-heading {display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;}
+.oc-plan-section-heading > span {font-size: 11px; color: #5b705e; background: #edf3ee; border-radius: 20px; padding: 4px 10px;}
+.oc-assistant-situation {margin-top: 24px; padding: 22px; border: 1px solid #cadacc; border-radius: 14px; background: #f3f7f1;}
+.oc-assistant-situation dl {display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin: 0;}
+.oc-assistant-situation dt {font-size: 11px; color: #647665;}
+.oc-assistant-situation dd {font-size: 17px; font-weight: 600; margin: 3px 0 0; color: #244631;}
+.oc-assistant-situation > p {font-size: 12px; margin: 16px 0 0; border-top: 1px solid #dce6d8; padding-top: 12px;}
+.oc-assistant-chat {padding: 24px; margin: 24px 0; background: #fff;}
+.oc-assistant-messages {max-height: 560px;}
+.oc-assistant-message {white-space: normal; padding: 18px; margin: 14px 0;}
+.oc-assistant-message p {white-space: pre-wrap; margin: 10px 0; line-height: 1.75;}
+.oc-assistant-message.user {margin-left: 12%; background: #edf3ee;}
+.oc-assistant-message.assistant {border: 1px solid #dce4df; background: #fbfcfa;}
+.oc-response-context {display: grid; gap: 4px; margin: 12px 0; padding: 12px; border-left: 3px solid #4c7553; background: #edf3e9; font-size: 12px;}
+.oc-assistant-prompts {display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0;}
+.oc-assistant-chat form {border-top: 1px solid #e1e8df; padding-top: 12px; margin-top: 18px;}
+.oc-plan-workbench {margin-top: 28px; border-top: 1px solid #dce4df; padding-top: 24px;}
+.oc-plan-actions {padding: 14px 0; margin: 0 0 16px; gap: 12px;}
+.oc-coaches-notes .oc-plan-editor {margin-top: 0;}
+.oc-plan-overview {padding: 20px; border: 1px solid #dce4df; border-radius: 12px; background: #f9fbf7; margin-bottom: 22px;}
+.oc-plan-columns {display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; align-items: start;}
+.oc-plan-group {min-width: 0; padding: 20px; border: 1px solid #dce4df; border-radius: 12px;}
+.oc-plan-entry {background: #f9fbf8; padding: 16px;}
+.oc-plan-empty {padding: 18px; border: 1px dashed #cad7c8; border-radius: 8px; color: #61765f; font-size: 13px;}
+.oc-plan-evidence summary {cursor: pointer; font-weight: 600;}
+@media (max-width: 800px) {
+    .oc-coaches-notes {padding: 18px;}
+    .oc-plan-columns {grid-template-columns: minmax(0, 1fr);}
+    .oc-assistant-situation dl {grid-template-columns: repeat(2, minmax(0, 1fr));}
+    .oc-assistant-chat, .oc-plan-group {padding: 16px;}
+    .oc-assistant-message.user {margin-left: 0;}
+}
