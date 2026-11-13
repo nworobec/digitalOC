@@ -5,6 +5,7 @@ import ConceptSuggestions from './ConceptSuggestions';
 import DataReview from './DataReview';
 import FormationEditor from './FormationEditor';
 import CoachesNotes from './CoachesNotes';
+import Visualizations from './Visualizations';
 import '../PreviewPage/preview.css';
 import './dashboard.css';
 
@@ -190,14 +191,15 @@ export default function Dashboard() {
             <a className="oc-brand" href="/" aria-label="DigitalOC dashboard"><span className="oc-brand-icon"><Icon name="target" size={25}/></span>digital<span>OC</span><span className="oc-brand-dot">.</span></a>
             <div className="oc-workspace"><span className="oc-avatar">{state?.posteam || 'OC'}</span><div><strong>{state ? `${state.posteam} offense` : 'Coordinator workspace'}</strong><span>SAVED GAME SESSIONS</span></div></div>
             <p className="oc-nav-label">YOUR SIDELINE</p>
-            <nav aria-label="Dashboard navigation">{[['Command center', 'grid'], ['Playbook', 'book'], ['Coaches Notes', 'book'], ['Drive log', 'clock'], ['Data & review', 'sliders']].map(([label, icon]) => <button key={label} disabled={blocked} className={view === label ? 'active' : ''} aria-current={view === label ? 'page' : undefined} onClick={() => setView(label)}><Icon name={icon}/>{label}{label === 'Drive log' && session && <span className="oc-nav-count">{session.plays.length}</span>}</button>)}</nav>
+            <nav aria-label="Dashboard navigation">{[['Command center', 'grid'], ['Playbook', 'book'], ['Coaches Notes', 'book'], ['Drive log', 'clock'], ['Data visualizations', 'grid'], ['Data & review', 'sliders']].map(([label, icon]) => <button key={label} disabled={blocked} className={view === label ? 'active' : ''} aria-current={view === label ? 'page' : undefined} onClick={() => setView(label)}><Icon name={icon}/>{label}{label === 'Drive log' && session && <span className="oc-nav-count">{session.plays.length}</span>}</button>)}</nav>
             <div className="oc-sidebar-bottom"><div className="oc-demo-label"><span/> {meta ? 'CONNECTED WORKSPACE' : 'CONNECTING'}</div><p>A clearer picture.<br/>A better next call.</p><a href="/preview">View design preview <Icon name="arrow" size={15}/></a><a href="/situation">Legacy play suggester <Icon name="arrow" size={15}/></a><div className="oc-profile"><span className="oc-avatar">OC</span><div><strong>Offensive coordinator</strong><span>Manual game tracking</span></div></div></div>
         </aside>
         <main className="oc-main">
             <header className="oc-topbar"><div>WORKSPACE <span>/</span><strong>{view}</strong></div><span className="oc-sample-badge"><span/>{meta ? 'Connected · experimental estimates' : 'Connecting to game service'}</span></header>
-            <section className="oc-page-heading"><div><p className="oc-eyebrow">EVERY DOWN. ONE STEP AHEAD.</p><h1>{view === 'Command center' ? 'Your next move starts here.' : view === 'Playbook' ? 'Your calls, ready to go.' : view === 'Coaches Notes' ? 'Build your plan for the next snap.' : view === 'Data & review' ? 'Build data you can trust.' : 'Every play tells a story.'}</h1><p>Track the game. Compare run and pass. Keep the next decision in view.</p></div>{session && <div className="oc-game-week">DRIVE {String(session.drive).padStart(2, '0')}<span>{session.status.replace(/_/g, ' ').toUpperCase()}</span></div>}</section>
+            <section className="oc-page-heading"><div><p className="oc-eyebrow">EVERY DOWN. ONE STEP AHEAD.</p><h1>{view === 'Command center' ? 'Your next move starts here.' : view === 'Playbook' ? 'Your calls, ready to go.' : view === 'Coaches Notes' ? 'Build your plan for the next snap.' : view === 'Data visualizations' ? 'See the whole field.' : view === 'Data & review' ? 'Build data you can trust.' : 'Every play tells a story.'}</h1><p>Track the game. Compare run and pass. Keep the next decision in view.</p></div>{session && <div className="oc-game-week">DRIVE {String(session.drive).padStart(2, '0')}<span>{session.status.replace(/_/g, ' ').toUpperCase()}</span></div>}</section>
             {error && <div className="oc-error" role="alert">{error}<button type="button" onClick={() => window.location.reload()}>Reload saved state</button></div>}
             {loading && <div className="oc-panel" role="status">Loading your workspace…</div>}
+            {view === 'Data visualizations' && <Visualizations initialTeam={state?.posteam || 'TB'}/>} 
             {meta && <>
                 {sessions.length > 0 && <label className="oc-session-picker">Saved game<select aria-label="Saved game" disabled={blocked} value={session?.id || ''} onChange={event => task(() => dashboardRequest(`/api/sessions/${event.target.value}`), 'Saved game loaded.')}><option value="" disabled>Select a game</option>{sessions.map(item => <option key={item.id} value={item.id}>{item.state.posteam} vs {item.state.defteam} · {new Date(item.updated_at).toLocaleString()}</option>)}</select></label>}
                 {session && <section className="oc-scoreboard" aria-label="Saved game situation"><div className="oc-matchup"><TeamLogo team={state.posteam}/><div><span>{state.posteam}<small>TRACKED OFFENSE</small></span><strong>{state.offense_score}</strong></div><span className="oc-score-divider">:</span><div><span>{state.defteam}</span><strong>{state.defense_score}</strong></div><TeamLogo team={state.defteam}/></div><div className="oc-score-stat"><span>QUARTER / CLOCK</span><strong>Q{state.qtr}<i/>{clock(state.quarter_seconds_remaining)}</strong></div><div className="oc-score-stat"><span>DOWN & DISTANCE</span><strong>{ordinal(state.down)} <em>& {state.ydstogo}</em></strong></div><div className="oc-score-stat"><span>FIELD POSITION</span><strong>{field(state)}</strong></div><div className="oc-timeouts"><span>TIMEOUTS</span><div>{Array.from({length: state.posteam_timeouts_remaining}, (_, i) => <i key={i}/>)}</div><small>{state.posteam_timeouts_remaining} remaining</small></div></section>}
@@ -245,3 +247,4 @@ export default function Dashboard() {
         </main>
     </div>;
 }
+
