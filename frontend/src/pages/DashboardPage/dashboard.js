@@ -237,8 +237,8 @@ export default function Dashboard() {
                     onSave={(context_id, content, source) => task(() => dashboardRequest(`/api/sessions/${session.id}/plan`, {
                         method: 'PUT', body: {...mutation(session), context_id, content, ...(source ? {source} : {})},
                     }), 'Coaching plan saved.')}
-                    onAssistant={(message, history) => dashboardRequest(`/api/sessions/${session.id}/assistant`, {
-                        method: 'POST', body: {revision: session.revision, message, history},
+                    onAssistant={(message, history, scenario) => dashboardRequest(`/api/sessions/${session.id}/assistant`, {
+                        method: 'POST', body: {revision: session.revision, message, history, ...(scenario ? {scenario} : {})},
                     })}/>}
 
                 {view === 'Data & review' && <DataReview session={session} calls={calls} meta={meta} busy={busy} onImport={(game_id, play_ids) => task(() => dashboardRequest('/api/labeling/import', {method: 'POST', body: {game_id, play_ids}}), 'Historical plays staged. Open each record below and verify its concept against film or charting evidence.')} onSave={(playId, review) => task(() => dashboardRequest(`/api/sessions/${session.id}/plays/${playId}/review`, {method: 'POST', body: {...mutation(session), review}}), 'Review saved. Original play and game state preserved.')}/>}

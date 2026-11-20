@@ -23,6 +23,7 @@ export default function CoachesNotes({session, calls, busy, onGenerate, onSave, 
     const [replace, setReplace] = useState(false);
     const [working, setWorking] = useState(false);
     const [conversation, setConversation] = useState([]);
+    const [scenario, setScenario] = useState(null);
     const [message, setMessage] = useState('');
     const [assistantError, setAssistantError] = useState('');
     const [assistantBusy, setAssistantBusy] = useState(false);
@@ -53,11 +54,13 @@ export default function CoachesNotes({session, calls, busy, onGenerate, onSave, 
         setAssistantError('');
         try {
             const history = conversation.slice(-12).map(({role, content, analysis}) => ({role, content: [content, analysis].filter(Boolean).join('\n\n').slice(0, 4000)}));
-            const result = await onAssistant(text, history);
+            const currentScenario = scenario?.session_id === session.id && scenario?.revision === session.revision ? scenario : null;
+            const result = await onAssistant(text, history, currentScenario);
             if (result.session_revision !== session.revision) {
                 throw new Error('The game session changed while the assistant was responding. Refresh and try again.');
             }
-            setConversation([...conversation.slice(-12), {role: 'user', content: text}, {role: 'assistant', content: result.reply, situation: result.situation_brief, provider: result.provider, analysis: result.analysis, providerWarning: result.provider_warning, coverageContext: result.coverage_context}]);
+            setScenario(result.scenario || null);
+            setConversation([...conversation.slice(-12), {role: 'user', content: text}, {role: 'assistant', content: result.reply, situation: result.situation_brief, provider: result.provider, analysis: result.analysis, providerWarning: result.provider_warning, coverageContext: result.coverage_context, discussion: result.discussion_scenario}]);
             if (result.plan) {
                 if (draft) {
                     setAssistantError('The assistant created another proposal, but it was not applied because your current edits are unsaved. Save or discard them before asking for another plan.');
@@ -100,6 +103,7 @@ export default function CoachesNotes({session, calls, busy, onGenerate, onSave, 
                 {conversation.map((entry, index) => <article className={`oc-assistant-message ${entry.role}`} key={index}><strong>{entry.role === 'user' ? 'You' : entry.provider === 'gemini' ? 'Gemini coaching assistant' : entry.provider === 'coaching_rules' ? 'Coaching rules · saved facts and playbook' : 'Playbook guidance · checked against saved situation'}</strong>
                     {entry.providerWarning && <p role="alert" className="oc-status-panel">Gemini analysis unavailable: {entry.providerWarning} Showing backend guidance only.</p>}
                     {entry.situation && <div className="oc-response-context"><strong>Saved situation at response</strong><span>{entry.situation.score} · {entry.situation.clock} · {entry.situation.down_distance} · {entry.situation.field_position}</span><span>Timeouts: {entry.situation.timeouts} · Objective: {entry.situation.objective}</span></div>}
+                    {entry.discussion && <div className="oc-response-context"><strong>Hypothetical · saved game unchanged</strong><span>{entry.discussion.situation.down_distance} · {entry.discussion.situation.field_position} · {entry.discussion.situation.clock}</span></div>}
                     {entry.analysis && <section className="oc-gemini-analysis"><strong>Gemini analysis · review against the saved facts</strong>{entry.analysis.split(/\n\s*\n/).map((paragraph, i) => <p key={i}>{paragraph}</p>)}</section>}
                     {entry.coverageContext && <details className="oc-plan-evidence"><summary>Coverage evidence · historical versus observed</summary><p>{entry.coverageContext}</p></details>}
                     {entry.content.split(/\n\s*\n/).map((paragraph, i) => <p key={i}>{paragraph}</p>)}</article>)}

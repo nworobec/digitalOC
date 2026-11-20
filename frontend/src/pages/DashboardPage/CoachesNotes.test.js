@@ -137,3 +137,25 @@ test('coverage evidence stays separate from Gemini analysis', async () => {
     expect(screen.getByText(/Historical sample: 207/)).toBeInTheDocument();
     expect(screen.getByText('Compare a field goal with going for the conversion.')).toBeInTheDocument();
 });
+
+test('retains hypothetical context for follow-ups but drops it after a saved revision changes', async () => {
+    const scenario = {session_id: 'one', revision: 3, outcome: {kind: 'gain', yards: 12, elapsed_seconds: 0}};
+    const assistant = jest.fn().mockResolvedValue({reply: 'Fourth and three.', plan: null, session_revision: 3, scenario,
+        discussion_scenario: {kind: 'hypothetical', situation: {down_distance: 'Down 4 · 3 yards to go', field_position: 'Opponent 8', clock: 'Q2 · 8:00'}}});
+    const {rerender} = render(<CoachesNotes {...props} session={{...session, revision: 3}} onAssistant={assistant}/>);
+    const send = text => {
+        fireEvent.change(screen.getByLabelText('Message the session assistant'), {target: {value: text}});
+        fireEvent.click(screen.getByText('Send message'));
+    };
+    send('If we gain 12 yards?');
+    expect(await screen.findByText('Hypothetical · saved game unchanged')).toBeInTheDocument();
+    expect(screen.getByText(/Down 4 · 3 yards to go/)).toHaveTextContent('Opponent 8');
+    send('Why go for it?');
+    await waitFor(() => expect(assistant).toHaveBeenCalledTimes(2));
+    expect(assistant.mock.calls[1][2]).toEqual(scenario);
+    await waitFor(() => expect(screen.getByLabelText('Message the session assistant')).toHaveValue(''));
+    rerender(<CoachesNotes {...props} session={{...session, revision: 4}} onAssistant={assistant}/>);
+    send('Does that mean you recommend going for it?');
+    await waitFor(() => expect(assistant).toHaveBeenCalledTimes(3));
+    expect(assistant.mock.calls[2][2]).toBeNull();
+});

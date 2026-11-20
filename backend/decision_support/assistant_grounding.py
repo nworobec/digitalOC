@@ -193,7 +193,14 @@ def grounded_answer(message, session, context):
                          'and a field goal only if the resulting spot is within the kicker’s range. ')
             text += ('A failed fourth-down conversion ends possession; you cannot then kick on that drive. '
                      'No kicking or conversion model establishes the best choice.')
-        return response(context, text, 'No game update was made. ' + (f'Applied {elapsed} elapsed seconds to the hypothetical only. ' if elapsed_match else 'Clock held constant because elapsed time was not supplied. ') + 'Assume no penalty or turnover. Recheck call eligibility for the resulting down, distance and field position.')
+        result = response(context, text, 'No game update was made. ' + (f'Applied {elapsed} elapsed seconds to the hypothetical only. ' if elapsed_match else 'Clock held constant because elapsed time was not supplied. ') + 'Assume no penalty or turnover. Recheck call eligibility for the resulting down, distance and field position.')
+        # Store only one explicit scenario, never choose between ambiguous examples.
+        result['_scenario_outcome'] = None
+        if len(gains) == 1:
+            yards = gains[0]
+            kind = 'touchdown' if yards == state['yardline_100'] else 'safety' if state['yardline_100']-yards == 100 else 'gain'
+            result['_scenario_outcome'] = dict(kind=kind, yards=yards, elapsed_seconds=elapsed)
+        return result
     if hypothetical:
         return response(context, 'Clarification needed: Provide the hypothetical down, distance, field position, score and time, or a specific gain from the saved situation. I will keep that scenario separate from the saved game.')
     if re.search(r'\b(clock|score|seconds|minutes|goal line|first.down marker|own 20|their 20|field position|current saved game)\b', q):
@@ -228,3 +235,43 @@ def render_selection(selection, context):
             paragraphs.append(f"Caution: Outside this template's preferred {low}–{high} yard distance band. Eligibility does not mean this is a suitable conversion choice.")
     paragraphs.append('Coverage is a coach hypothesis unless observed; historical coverage does not establish the next look. No named-call success probability is available.')
     return response(context, '\n\n'.join(paragraphs), 'Confirm protection and assignments, and recheck eligibility after the next snap. Starter templates require coach review.')
+
+
+def followup_answer(message, context, scenario_state=None, scenario_status=None):
+    """Answer narrow follow-ups without model prose or unrelated call suggestions."""
+    q = normalize(message)
+    if re.search(r'\b(gain|gains|gained|gaining|lose|lost|losing|incomplete)\b', q):
+        return None
+    # Let the full parser handle a newly specified score scenario.
+    if re.search(r'\b(hypothetically|suppose|what if|if we were|imagine)\b', q) and re.search(r'\b(down|trailing)\b', q):
+        return None
+    state = scenario_state or context['state']
+    unchanged = ' This is hypothetical; the saved game remains unchanged.'
+    if 'field goal' in q and re.search(r'\b(good|successful|made|make|makes)\b', q) and re.search(r'score|lead|ahead|tie', q):
+        if scenario_status and scenario_status != 'active':
+            return dict(reply='That hypothetical possession has ended. Specify the next possession before adding a field goal.', plan=None)
+        if re.search(r'opponent|they|their', q):
+            return dict(reply='Which team is kicking? Specify the scoring team before calculating the hypothetical score.', plan=None)
+        offense, defense = state['offense_score'] + 3, state['defense_score']
+        delta = offense - defense
+        lead = 'The game would be tied.' if delta == 0 else f"{state['posteam']} would lead by {delta}." if delta > 0 else f"{state['posteam']} would trail by {-delta}."
+        return dict(reply=f"If your offense’s field goal is good, the score would be {state['posteam']} {offense} – {state['defteam']} {defense}. {lead}" + unchanged, plan=None)
+    if re.search(r'did|have|has', q) and re.search(r'update|change|save', q) and re.search(r'game|situation|down', q):
+        return dict(reply=f"No. The saved game is still down {context['state']['down']} with {context['state']['ydstogo']} yards to go at {field_position(context['state'])}. Chat scenarios do not record plays or change game state.", plan=None)
+    recommendation = bool(re.search(r'recommend|should we|would you', q) and re.search(r'go(?:ing)? for it|kick', q))
+    tradeoff = bool(re.search(r'why|rather than|instead of|tradeoff|trade-off', q) and re.search(r'go(?:ing)? for it|kick|field goal', q))
+    if not recommendation and not tradeoff:
+        return None
+    if scenario_state is None and state['down'] != 4:
+        return dict(reply='I have not established that going for it is better than kicking. Specify the hypothetical fourth-down distance and field position, or give a gain from the saved situation, so I can explain that decision.', plan=None)
+    if scenario_status and scenario_status != 'active':
+        return dict(reply='That hypothetical possession has ended; it does not leave another fourth-down decision on the same drive.' + unchanged, plan=None)
+    if state['down'] != 4:
+        return dict(reply=f"The hypothetical is down {state['down']} with {state['ydstogo']} yards to go at {field_position(state)}, not fourth down. Please clarify which kicking decision you mean." + unchanged, plan=None)
+    lead = 'I explained the tradeoff; I have not established which option is better. ' if recommendation else ''
+    explanation = (f"For the hypothetical fourth and {state['ydstogo']} at {field_position(state)}, going for it offers a chance to extend the drive and pursue a touchdown. "
+                   'A successful field goal adds three points; a failed fourth-down conversion ends possession. ')
+    if state['offense_score'] == state['defense_score']:
+        explanation += f"A successful field goal would put {state['posteam']} ahead {state['offense_score']+3}–{state['defense_score']}. "
+    explanation += 'Choosing between them requires conversion and kicking evidence we do not currently have, along with the score, remaining time and coach’s objective.'
+    return dict(reply=lead + explanation + unchanged, plan=None)

@@ -223,3 +223,98 @@ class AssistantTests(TestCase):
         answer = grounded_answer('If we lose 10 yards, what next?', self.session, context)['reply']
         self.assertIn('fourth and 25 at Opponent 30', answer)
         self.assertIn('punting for field position', answer)
+
+    def test_hypothetical_followups_preserve_scenario_and_saved_game(self):
+        scenario = self.ask(message='If we gain 12 yards, what happens?').get_json()['scenario']
+        with patch.dict('os.environ', DIGITALOC_ASSISTANT_PROVIDER='gemini'), patch('backend.decision_support.assistant.contextualize') as model:
+            for question, expected in [
+                ('Why would we go for it instead of kicking in that situation?', 'fourth and 3 at Opponent 8'),
+                ('If the field goal is good, what would the score be?', 'KC 10 – BUF 7'),
+                ('Does that mean you recommend going for it?', 'I have not established which option is better'),
+            ]:
+                result = self.ask(message=question, scenario=scenario)
+                self.assertEqual(result.status_code, 200)
+                data = result.get_json()
+                self.assertIn(expected, data['reply'])
+                self.assertNotIn('Call options:', data['reply'])
+                self.assertNotIn('Clarification needed', data['reply'])
+                self.assertEqual(data['scenario'], scenario)
+                self.assertEqual(data['discussion_scenario']['situation']['field_position'], 'Opponent 8')
+            model.assert_not_called()
+        self.assertEqual(self.client.get(f"/api/sessions/{self.session['id']}").get_json(), self.session)
+
+    def test_hypothetical_calls_use_future_distance_and_new_gain_rebases(self):
+        scenario = self.ask(message='If we gain 12 yards, what happens?').get_json()['scenario']
+        with patch('backend.decision_support.assistant.urlopen') as model:
+            result = self.ask(message='Which plays fit that fourth down?', scenario=scenario).get_json()
+            model.assert_not_called()
+        self.assertIn('Hypothetical scenario only', result['reply'])
+        self.assertIn('Down 4', result['reply'])
+        self.assertIn('3 yards to go', result['reply'])
+        self.assertNotIn('Outside this template', result['reply'])
+        revised = self.ask(message='If we gain 5 yards instead?', scenario=scenario).get_json()
+        self.assertIn('fourth and 10 at Opponent 15', revised['reply'])
+        self.assertEqual(revised['scenario']['outcome']['yards'], 5)
+
+    def test_stale_or_cross_session_scenarios_are_discarded(self):
+        scenario = self.ask(message='If we gain 12 yards, what happens?').get_json()['scenario']
+        for change in [{'revision': -1}, {'session_id': 'another-game'}]:
+            result = self.ask(message='Does that mean you recommend going for it?', scenario={**scenario, **change}).get_json()
+            self.assertIsNone(result['scenario'])
+            self.assertIsNone(result['discussion_scenario'])
+            self.assertIn('Specify the hypothetical', result['reply'])
+
+    def test_scenario_validation_and_ended_possession(self):
+        scenario = self.ask(message='If we gain 20 yards, what happens?').get_json()['scenario']
+        result = self.ask(message='If the field goal is good, what would the score be?', scenario=scenario).get_json()
+        self.assertIn('possession has ended', result['reply'])
+        self.assertNotIn('KC 16', result['reply'])
+        for invalid in [{**scenario, 'state': self.session['state']},
+                        {**scenario, 'outcome': {'kind': 'gain', 'yards': 999, 'elapsed_seconds': 0}}]:
+            self.assertEqual(self.ask(scenario=invalid).status_code, 400)
+
+    def test_new_score_hypothetical_is_not_answered_from_retained_score(self):
+        scenario = self.ask(message='If we gain 12 yards, what happens?').get_json()['scenario']
+        result = self.ask(message='Suppose we are trailing by four. If the field goal is good, would we lead?', scenario=scenario).get_json()
+        self.assertIn('1-point deficit', result['reply'])
+        self.assertNotIn('KC 10', result['reply'])
+
+    def test_call_request_cannot_silently_use_a_different_down(self):
+        state = {**self.session['state'], 'down': 2, 'ydstogo': 10, 'yardline_100': 30,
+                 'qtr': 3, 'offense_score': 21, 'defense_score': 7}
+        self.session = self.client.post('/api/sessions', json={'state': state}).get_json()
+        self.url = f"/api/sessions/{self.session['id']}/assistant"
+        scenario = self.ask(message='If we gain 12 yards, what happens?').get_json()['scenario']
+        with patch.dict('os.environ', DIGITALOC_ASSISTANT_PROVIDER='gemini'), patch('backend.decision_support.assistant.contextualize') as model:
+            for question in ['Which plays fit that fourth down?', 'Which calls fit that 4th-and-3?']:
+                data = self.ask(message=question, scenario=scenario).get_json()
+                self.assertIn('Clarification needed', data['reply'])
+                self.assertIn('down 1 with 10 yards to go at Opponent 18', data['reply'])
+                self.assertNotIn('Call options:', data['reply'])
+                self.assertEqual(data['scenario'], scenario)
+            valid = self.ask(message='Which plays fit that first down?', scenario=scenario).get_json()
+            self.assertIn('Call options:', valid['reply'])
+            model.assert_not_called()
+        self.assertEqual(self.client.get(f"/api/sessions/{self.session['id']}").get_json(), self.session)
+
+    def test_missing_or_stale_scenario_cannot_select_calls_for_wrong_down(self):
+        state = {**self.session['state'], 'down': 2, 'ydstogo': 10, 'yardline_100': 30}
+        self.session = self.client.post('/api/sessions', json={'state': state}).get_json()
+        self.url = f"/api/sessions/{self.session['id']}/assistant"
+        stale = {'session_id': self.session['id'], 'revision': -1,
+                 'outcome': {'kind': 'gain', 'yards': 12, 'elapsed_seconds': 0}}
+        for provider in ['ollama', 'gemini']:
+            with patch.dict('os.environ', DIGITALOC_ASSISTANT_PROVIDER=provider), \
+                    patch('backend.decision_support.assistant.contextualize') as gemini, \
+                    patch('backend.decision_support.assistant.urlopen') as ollama:
+                for scenario in [None, stale]:
+                    for question in ['Which plays fit that fourth down?', 'Which calls fit 4th-and-3?', 'Which plays fit 4&3?']:
+                        result = self.ask(message=question, scenario=scenario)
+                        self.assertEqual(result.status_code, 200)
+                        data = result.get_json()
+                        self.assertIn('saved situation is down 2 with 10 yards to go at Opponent 30', data['reply'])
+                        self.assertNotIn('Call options:', data['reply'])
+                        self.assertIsNone(data['scenario'])
+                gemini.assert_not_called()
+                ollama.assert_not_called()
+        self.assertEqual(self.client.get(f"/api/sessions/{self.session['id']}").get_json(), self.session)

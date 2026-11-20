@@ -3,6 +3,7 @@
 import ipaddress
 import json
 import os
+import re
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -13,7 +14,7 @@ from .evaluation import evaluate_session
 from .gemini_assistant import contextualize, GeminiUnavailable
 from .game import advance_play
 from .plans import context_id
-from .assistant_grounding import grounded_answer, render_selection
+from .assistant_grounding import grounded_answer, render_selection, followup_answer
 from .playbook import PLAYBOOK, default_preferences
 from .suitability import suggest_concepts
 
@@ -186,7 +187,8 @@ def register_assistant_routes(app, store, bundle, data_dir):
     @app.post("/api/sessions/<session_id>/assistant")
     def assistant_message(session_id):
         payload = request.get_json(silent=True)
-        if (not isinstance(payload, dict) or set(payload) != {"revision", "message", "history"}
+        if (not isinstance(payload, dict) or not {"revision", "message", "history"} <= set(payload)
+                or set(payload) - {"revision", "message", "history", "scenario"}
                 or isinstance(payload["revision"], bool) or not isinstance(payload["revision"], int)
                 or not isinstance(payload["message"], str) or not payload["message"].strip()
                 or len(payload["message"]) > MAX_MESSAGE_LENGTH):
@@ -202,12 +204,65 @@ def register_assistant_routes(app, store, bundle, data_dir):
         if configured not in ("ollama", "gemini"):
             raise AssistantUnavailable("DIGITALOC_ASSISTANT_PROVIDER must be ollama or gemini.")
         context = _session_context(session, bundle, data_dir)
-        answer = grounded_answer(payload["message"], session, context)
+        scenario = payload.get("scenario")
+        scenario_state = scenario_status = None
+        if scenario is not None:
+            if (not isinstance(scenario, dict) or set(scenario) != {"session_id", "revision", "outcome"}
+                    or not isinstance(scenario["revision"], int) or isinstance(scenario["revision"], bool)):
+                raise ValueError("Invalid hypothetical scenario")
+            if scenario["session_id"] != session_id or scenario["revision"] != session["revision"]:
+                scenario = None  # Old scenarios cannot migrate to another saved situation.
+            else:
+                scenario_state, scenario_status = advance_play(session["state"], scenario["outcome"])
+        discussion = None
+        answer = followup_answer(payload["message"], context, scenario_state, scenario_status)
+        direct_followup = answer is not None
+        if answer is None:
+            answer = grounded_answer(payload["message"], session, context)
+        if answer is not None and "_scenario_outcome" in answer:
+            outcome = answer.pop("_scenario_outcome")
+            scenario = dict(session_id=session_id, revision=session["revision"], outcome=outcome) if outcome else None
+            if outcome:
+                scenario_state, scenario_status = advance_play(session["state"], outcome)
+            else:
+                scenario_state = scenario_status = None
+        if scenario_state is not None:
+            discussion = dict(kind="hypothetical", status=scenario_status,
+                              situation=situation_brief({**session, "state": scenario_state}))
+            context["discussion_scenario"] = dict(state=scenario_state, status=scenario_status,
+                                                 assumption="Recomputed from saved state; not recorded as a play")
+        # Check the requested down before either provider can select calls.
+        q = payload["message"].lower()
+        call_request = bool(re.search(r'\b(?:plays?|calls?|concepts?)\b', q))
+        named_down = re.search(r"\b(first|second|third|fourth|1st|2nd|3rd|4th|[1-4])(?:[ -]+(?:down|and)|\s*&)", q)
+        down_numbers = {"first": 1, "1st": 1, "second": 2, "2nd": 2, "third": 3, "3rd": 3,
+                        "fourth": 4, "4th": 4, "1": 1, "2": 2, "3": 3, "4": 4}
+        reference_state = scenario_state or session["state"]
+        if call_request and named_down and down_numbers[named_down[1]] != reference_state["down"]:
+            reference = "retained hypothetical" if scenario_state is not None else "saved situation"
+            spot = situation_brief({**session, "state": reference_state})["field_position"]
+            answer = dict(reply=(f"Clarification needed: The {reference} is down {reference_state['down']} "
+                                 f"with {reference_state['ydstogo']} yards to go at {spot}, not {named_down[1]} down. "
+                                 "Ask for calls for that situation, or specify a new gain from the saved game. "
+                                 "The saved game remains unchanged."), plan=None)
+            direct_followup = True
+        # Explicit requests about plays in the retained scenario get fresh eligibility.
+        if (answer is None and scenario_state is not None and call_request
+                and re.search(r'that|fourth|4th|hypothetical', q)):
+            if scenario_status != "active":
+                answer = dict(reply="The hypothetical possession has ended. There are no next offensive calls on that drive.", plan=None)
+            else:
+                future = _session_context({**session, "state": scenario_state, "status": scenario_status}, bundle, data_dir)
+                fit = suggest_concepts(scenario_state, context["preferences"])
+                ids = [row["call_id"] for row in fit["suggestions"]]
+                answer = render_selection({"focus": "calls" if ids else "clarify", "call_ids": ids}, future)
+                answer["reply"] = "Hypothetical scenario only; saved game unchanged.\n\n" + answer["reply"]
+            direct_followup = True
         provider, model = "coaching_rules", None
         analysis = None
         provider_warning = None
         coverage_note = None
-        if configured == "gemini":
+        if configured == "gemini" and not direct_followup:
             try:
                 result = contextualize(context, payload["message"], history, answer)
                 if answer is None:
@@ -256,5 +311,6 @@ def register_assistant_routes(app, store, bundle, data_dir):
                        session_revision=session["revision"], situation_brief=situation_brief(session),
                        provider=provider, model=model, analysis=analysis,
                        configured_provider=configured, provider_warning=provider_warning, coverage_context=coverage_note,
+                       scenario=scenario, discussion_scenario=discussion,
                        analysis_basis="model_authored_review_required" if analysis else None,
                        answer_basis="server_facts_and_catalog", proposal_source="coaching_rules" if answer["plan"] else None)
